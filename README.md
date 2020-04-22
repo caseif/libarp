@@ -32,5 +32,9 @@ cmake --build .
 
 ## License
 
-libarp is made available under the [MIT license](https://opensource.org/licenses/MIT). You may use, modify, and
+libarp is made available under the [MIT License](https://opensource.org/licenses/MIT). You may use, modify, and
 distribute the project within its terms.
+
+The ARP specification is made available under the
+[Apache License, Version 2.0](https://opensource.org/licenses/Apache-2.0). You may use, modify and redistribute the
+specification within its terms.
