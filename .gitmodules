@@ -1,0 +1,12 @@
+[submodule "libs/--force"]
+	path = libs/--force
+	url = https://gitlab.com/federicomenaquintero/bzip2.git
+[submodule "libs/xz"]
+	path = libs/xz
+	url = https://github.com/xz-mirror/xz.git
+[submodule "libs/zlib"]
+	path = libs/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "libs/bzip2"]
+	path = libs/bzip2
+	url = https://gitlab.com/federicomenaquintero/bzip2.git
