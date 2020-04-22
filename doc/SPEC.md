@@ -56,7 +56,7 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0xA` | `0x4` | Header Length | The length of the header in bytes, beginning with the magic number. Useful for slurping the whole header at once if desired. |
 | `0xE` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
 | `0x10` | `0x1` | Parts | The number of files comprising this package. This value be between 1 and 99, inclusive. |
-| `0x11` | `0x8` | Part Size | The size of each file comprising this package. |
+| `0x11` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
 | `0x19` | `0x17` | Reserved | Reserved for future use. |
 | `0x30`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
 | `0x38`| `0x8` | Directory Size | The length in bytes of the directory section. |
@@ -91,8 +91,9 @@ package specifies a compression scheme which already includes a CRC, such as `bz
 | `0x0` | `0x1` | Name Length | The length of the entry name in bytes. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
 | `0x2` | `0x8` | Data Pointer | A pointer to this entry's data. This will be an offset into the directory section if the entry is a directory, or into the body section otherwise. See [Parts](#parts) for nuances regarding body section offsets. |
-| `0xA` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
-| `0xE` | variable | Entry Name | The name of this entry as a UTF-8-encoded string. |
+| `0xA` | `0x8` | Data Length | The length of the resource in bytes. If this entry is a directory, this should be all zeroes. |
+| `0x12` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
+| `0x16` | variable | Entry Name | The name of this entry as a UTF-8-encoded string. |
 
 ### Body
 
