@@ -3,7 +3,7 @@
 ARP is a binary format for packing resource files in a structured manner. libarp is a reference implementation of
 pack/unpack functionality for the format.
 
-ARP's full specification can be found in the [SPEC.md](docs/SPEC.md) file in this repository.
+ARP's full specification can be found in the [SPEC.md](doc/SPEC.md) file in this repository.
 
 ## Compiling
 
