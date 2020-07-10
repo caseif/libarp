@@ -29,21 +29,24 @@ ARP packages are contained by files with the extension `.arp`. The maximum file 
 ### Parts
 
 ARP packages may be split into multiple files (parts) if desired. However, this must be explicitly declared in the
-header. A package may have up to 99 parts. The first part has index 1.
+header. A package may have up to 999 parts. The first part has index 1.
 
-Each part file must be named as follows: `<package name>.part##.arp`. For example, part 2 of package foo will be named
-`foo.part02.arp`. This naming convention is not required for the first part.
+Each part file must be named as follows: `<package name>.part###.arp`. For example, part 2 of package foo will be named
+`foo.part002.arp`. This naming convention is not required for the first part.
 
-Each part must begin with a 16-byte [Part Header](#part-header), which will be ignored in the calculation of
-offsets. (For example, if each part is `1000` bytes and the body begins at byte `500`, the data at body offset `600`
-will be physically located at byte `116` of the second part).
+Each part must begin with a 16-byte [Part Header](#part-header) (described below), which will be ignored in the
+calculation of offsets. (For example, if each part is `1000` bytes and the body begins at byte `500`, the data at body
+offset `600` will be physically located at byte `116` of the second part).
 
-The main header and directory sections must be contained by the first part.
+### File Layout
 
-## Structure
+The first part of an ARP package contains three primary sections: the package header, the directory, and the body. These
+sections are described below.
 
-An ARP package contains three primary sections: the header, the directory, and the body. These sections are described
-respectively below.
+Subsequent parts do not include the package header or directory structures, Instead, they include a shorter
+[Part Header](#part-header) followed immediately by the body structure.
+
+## Structures
 
 ### Header
 
@@ -55,9 +58,9 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x8` | `0x2` | Version | The format major version the package conforms to. Parsers should refuse to parse further if they do not provide explicit support for this major version of the format. |
 | `0xA` | `0x4` | Header Length | The length of the header in bytes, beginning with the magic number. Useful for slurping the whole header at once if desired. |
 | `0xE` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
-| `0x10` | `0x1` | Parts | The number of files comprising this package. This value be between 1 and 99, inclusive. |
-| `0x11` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
-| `0x19` | `0x17` | Reserved | Reserved for future use. |
+| `0x10` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
+| `0x12` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
+| `0x1A` | `0x16` | Reserved | Reserved for future use. |
 | `0x30`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
 | `0x38`| `0x8` | Directory Size | The length in bytes of the directory section. |
 | `0x40`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
@@ -68,13 +71,14 @@ The package header describes the meta-attributes of the ARP package. The structu
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
 | `0x0` | `0x8` | Magic | Must be hex sequence `1B` `41` `52` `47` `55` `53` `50` `54` (`0x1B` `ARGUSPT`). **This is different to the magic in the primary header.** |
-| `0x8` | `0x1` | Part Number | The index of this part. This must be between 2 and 99. |
-| `0x9` | `0x7` | Reserved | Reserved for future use. |
+| `0x8` | `0x2` | Part Number | The index of this part. This must be between 2 and 999, inclusive. |
+| `0xA` | `0x6` | Reserved | Reserved for future use. |
 
 ### Directory
 
-The directory begin with an 8-byte length value is comprised of sequential directory entries which point to folders and resources in the package. The
-structure of a directory entry is described below.
+The directory structure begins with an 8-byte length value denoting the length of the structure, including the length
+prefix. The remainder of the structure is comprised of sequential directory entries which point to folders and resources
+in the package. The structure of a directory entry is described below.
 
 The first directory entry must describe the root folder of the package. This entry has the magic name `0x00` (a single
 `NUL` character).
