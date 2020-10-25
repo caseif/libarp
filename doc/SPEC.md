@@ -22,7 +22,7 @@ version is exclusively used for clarifying, corrective, or otherwise backwards-c
 specified as a single integer in the header of ARP files corresponds to the major version of the specification that the
 file conforms to.
 
-## Container
+## File Structure
 
 ARP packages are contained by files with the extension `.arp`. The maximum file size is `2^64-1` bytes.
 
@@ -46,9 +46,9 @@ sections are described below.
 Subsequent parts do not include the package header or directory structures, Instead, they include a shorter
 [Part Header](#part-header) followed immediately by the body structure.
 
-## Structures
+### Structures
 
-### Header
+#### Header
 
 The package header describes the meta-attributes of the ARP package. The structure is described below
 
@@ -65,16 +65,17 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x38`| `0x8` | Directory Size | The length in bytes of the directory section. |
 | `0x40`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
 | `0x48`| `0x8` | Body Size | The length in bytes of the body section. |
+| `0x50` | `0x20` | Namespace | The package namespace as a UTF-8-encoded string. |
 
-### Part Header
+#### Part Header
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
-| `0x0` | `0x8` | Magic | Must be hex sequence `1B` `41` `52` `47` `55` `53` `50` `54` (`0x1B` `ARGUSPT`). **This is different to the magic in the primary header.** |
+| `0x0` | `0x8` | Magic | Must be hex sequence `1B` `41` `52` `47` `55` `53` `50` `54` (`0x1B` `ARGUSPT`). **This is different from the magic in the primary header.** |
 | `0x8` | `0x2` | Part Number | The index of this part. This must be between 2 and 999, inclusive. |
 | `0xA` | `0x6` | Reserved | Reserved for future use. |
 
-### Directory
+#### Directory
 
 The directory structure begins with an 8-byte length value denoting the length of the structure, including the length
 prefix. The remainder of the structure is comprised of sequential directory entries which point to folders and resources
@@ -83,7 +84,7 @@ in the package. The structure of a directory entry is described below.
 The first directory entry must describe the root folder of the package. This entry has the magic name `0x00` (a single
 `NUL` character).
 
-#### Directory Entry
+##### Directory Entry
 
 A directory entry describes and points to either a resource or another directory entry.
 
@@ -99,7 +100,7 @@ package specifies a compression scheme which already includes a CRC, such as `bz
 | `0x12` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
 | `0x16` | variable | Entry Name | The name of this entry as a UTF-8-encoded string. |
 
-### Body
+#### Body
 
 The body section is comprised of raw resource data. There is no explicit structure in this section. It is organized
 according to the directory section.
@@ -134,3 +135,11 @@ decompression support is not guaranteed by the specification.
 | Magic | Compression Type |
 | :-- | :-- |
 | `lz` | [LZMA](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Markov_chain_algorithm) |
+
+## Referencing Resources
+
+ARP defines an idiomatic way of referencing resources contained by an ARP package via the ARP path specification. An ARP
+path contains the following components:
+
+- The namespace of the package containing the resource
+- A colon (`:`)
