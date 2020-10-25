@@ -126,15 +126,16 @@ magic.**
 Files in the archive may be compressed with a number of different schemes. The available formats as well as their
 magic values are described in the table below.
 
-As of version 1.0, the ARP specification only requires support for LZMA compression to be provided by compliant
-implementations.
+As of version 1.0, the ARP specification requires that compliant implementations provide support only for the DEFLATE
+algorithm. DEFLATE is chosen as the standard compression algorithm for its high compression ratio and decompression
+speed.
 
 Generators need not limit themselves to these values if they wish to use other compression schemes, but
 decompression support is not guaranteed by the specification.
 
 | Magic | Compression Type |
 | :-- | :-- |
-| `lz` | [LZMA](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Markov_chain_algorithm) |
+| `df` | [DEFLATE](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Markov_chain_algorithm) |
 
 ## Referencing Resources
 
@@ -143,3 +144,9 @@ path contains the following components:
 
 - The namespace of the package containing the resource
 - A colon (`:`)
+- The parent directories of the resource beginning from the root, with each followed by a forward-slash (`/`)
+- The base name of the resource
+
+For example, a package has a namespace of `foo`, a resource in the root called `bar`, and a directory in the root called
+`baz`. The `baz` directory contains a resource called `qux`. The path referencing the resource `bar` is `foo:bar`, and
+the path referencing the resource `qux` is `foo:baz/qux`.
