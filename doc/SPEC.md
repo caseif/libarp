@@ -58,14 +58,14 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x8` | `0x2` | Version | The format major version the package conforms to. Parsers should refuse to parse further if they do not provide explicit support for this major version of the format. |
 | `0xA` | `0x4` | Header Length | The length of the header in bytes, beginning with the magic number. Useful for slurping the whole header at once if desired. |
 | `0xE` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
-| `0x10` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
-| `0x12` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
-| `0x1A` | `0x16` | Reserved | Reserved for future use. |
-| `0x30`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
-| `0x38`| `0x8` | Directory Size | The length in bytes of the directory section. |
-| `0x40`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
-| `0x48`| `0x8` | Body Size | The length in bytes of the body section. |
-| `0x50` | `0x20` | Namespace | The package namespace as a UTF-8-encoded string. |
+| `0x10` | `0x20` | Namespace | The package namespace as a UTF-8-encoded string. |
+| `0x30` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
+| `0x32` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
+| `0x3A` | `0x26` | Reserved | Reserved for future use. |
+| `0x60`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
+| `0x68`| `0x8` | Directory Size | The length in bytes of the directory section. |
+| `0x70`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
+| `0x78`| `0x8` | Body Size | The length in bytes of the body section. |
 
 #### Part Header
 
