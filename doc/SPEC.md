@@ -125,11 +125,12 @@ magic.**
 Files in the archive may be compressed with a number of different schemes. The available formats as well as their
 magic values are described in the table below.
 
+As of version 1.0, the ARP specification only requires support for LZMA compression to be provided by compliant
+implementations.
+
 Generators need not limit themselves to these values if they wish to use other compression schemes, but
-parser support may not be guaranteed.
+decompression support is not guaranteed by the specification.
 
 | Magic | Compression Type |
 | :-- | :-- |
-| `df` | [Deflate](https://en.wikipedia.org/wiki/DEFLATE) |
 | `lz` | [LZMA](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Markov_chain_algorithm) |
-| `bz` | [bzip2](https://en.wikipedia.org/wiki/Bzip2) |
