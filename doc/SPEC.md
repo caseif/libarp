@@ -91,11 +91,11 @@ A directory entry describes and points to either a resource or another directory
 Directory entries which point to resource data will contain the CRC-32 of the resource data. This will be ignored if the
 package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
-Compliant implementations are not required to support entry names longer than 255 bytes.
+The maximum length for an entry name by design is 255 bytes.
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
-| `0x0` | `0x1` | Name Length | The length of the entry name in bytes. |
+| `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including the null terminator byte. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
 | `0x2` | `0x2` | Part index | The index of the package part containing the resource data. |
 | `0x4` | `0x8` | Data offset | The offset of this entry's data in its . This will be an offset into the directory section if the entry is a directory, or into the body section otherwise. See [Parts](#parts) for nuances regarding body section offsets. |
