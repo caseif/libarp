@@ -95,15 +95,19 @@ package specifies a compression scheme which already includes a CRC, such as `bz
 | --: | --: | :-: | :-- |
 | `0x0` | `0x1` | Name Length | The length of the entry name in bytes. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
-| `0x2` | `0x8` | Data Pointer | A pointer to this entry's data. This will be an offset into the directory section if the entry is a directory, or into the body section otherwise. See [Parts](#parts) for nuances regarding body section offsets. |
-| `0xA` | `0x8` | Data Length | The length of the resource in bytes. If this entry is a directory, this should be all zeroes. |
-| `0x12` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
+| `0x2`
+| `0x4` | `0x8` | Data offset | The offset of this entry's data in its . This will be an offset into the directory section if the entry is a directory, or into the body section otherwise. See [Parts](#parts) for nuances regarding body section offsets. |
+| `0xC` | `0x8` | Data Length | The length of the resource in bytes. If this entry is a directory, this should be all zeroes. |
+| `0x14` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
 | `0x16` | variable | Entry Name | The name of this entry as a UTF-8-encoded string. |
 
 #### Body
 
 The body section is comprised of raw resource data. There is no explicit structure in this section. It is organized
 according to the directory section.
+
+In the first package part, the body section begins at the offset defined in the package header. In subsequent parts,
+the body immediately follows the header.
 
 ## Magic Values
 
