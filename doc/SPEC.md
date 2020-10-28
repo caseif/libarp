@@ -8,7 +8,9 @@ Strictly speaking, the phrase "ARP package" is tautological. However, for the sa
 be considered a completely acceptable way of describing a binary structure encoding data in the ARP format, and will be
 used to refer to such throughout this specification.
 
-Unless otherwise noted, all integer values referred to in the format are to be treated as unsigned and little-Endian.
+Unless otherwise noted, all string values referred to in the format are stored as null-terminated UTF-8-encoded strings.
+
+Unless otherwise noted, all integer values referred to in the format are encoded as unsigned and little-Endian.
 
 ## Purpose
 
@@ -34,9 +36,8 @@ header. A package may have up to 999 parts. The first part has index 1.
 Each part file must be named as follows: `<package name>.part###.arp`. For example, part 2 of package foo will be named
 `foo.part002.arp`. This naming convention is not required for the first part.
 
-Each part must begin with a 16-byte [Part Header](#part-header) (described below), which will be ignored in the
-calculation of offsets. (For example, if each part is `1000` bytes and the body begins at byte `500`, the data at body
-offset `600` will be physically located at byte `116` of the second part).
+Each part must begin with a 16-byte [Part Header](#part-header) (described below). The body section corresponding to the
+part immediately follows this header.
 
 ### File Layout
 
@@ -56,16 +57,15 @@ The package header describes the meta-attributes of the ARP package. The structu
 | --: | --: | :-: | :-- |
 | `0x0` | `0x8` | Magic | Must be hex sequence `1B` `41` `52` `47` `55` `53` `52` `50` (`0x1B` `ARGUSRP`). |
 | `0x8` | `0x2` | Version | The format major version the package conforms to. Parsers should refuse to parse further if they do not provide explicit support for this major version of the format. |
-| `0xA` | `0x4` | Header Length | The length of the header in bytes, beginning with the magic number. Useful for slurping the whole header at once if desired. |
-| `0xE` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
-| `0x10` | `0x20` | Namespace | The package namespace as a UTF-8-encoded string. |
-| `0x30` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
-| `0x32` | `0x8` | Part Size | The size of each file comprising this package, not including the [Part Header](#part-header). |
-| `0x3A` | `0x26` | Reserved | Reserved for future use. |
+| `0xA` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
+| `0xC` | `0x30` | Namespace | The package namespace as a string. |
+| `0x3C` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
+| `0x3E` | `0x22` | Reserved | Reserved for future use. |
 | `0x60`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
 | `0x68`| `0x8` | Directory Size | The length in bytes of the directory section. |
 | `0x70`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
 | `0x78`| `0x8` | Body Size | The length in bytes of the body section. |
+| `0x80` | `0x80` | Reserved | Reserved for future use |
 
 #### Part Header
 
@@ -99,15 +99,15 @@ package specifies a compression scheme which already includes a CRC, such as `bz
 | `0x4` | `0x8` | Data offset | The offset of this entry's data in its . This will be an offset into the directory section if the entry is a directory, or into the body section otherwise. See [Parts](#parts) for nuances regarding body section offsets. |
 | `0xC` | `0x8` | Data Length | The length of the resource in bytes. If this entry is a directory, this should be all zeroes. |
 | `0x14` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
-| `0x16` | variable | Entry Name | The name of this entry as a UTF-8-encoded string. |
+| `0x16` | variable | Entry Name | The name of this entry as a string. |
 
 #### Body
 
-The body section is comprised of raw resource data. There is no explicit structure in this section. It is organized
+A body section is comprised of raw resource data. There is no explicit structure in this section. It is organized
 according to the directory section.
 
-In the first package part, the body section begins at the offset defined in the package header. In subsequent parts,
-the body immediately follows the header.
+In the first package part, the corresponding body section begins at the offset defined in the package header. In
+subsequent parts, the body immediately follows the header.
 
 ## Magic Values
 
