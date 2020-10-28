@@ -91,6 +91,8 @@ A directory entry describes and points to either a resource or another directory
 Directory entries which point to resource data will contain the CRC-32 of the resource data. This will be ignored if the
 package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
+Compliant implementations are not required to support entry names longer than 255 bytes.
+
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
 | `0x0` | `0x1` | Name Length | The length of the entry name in bytes. |
