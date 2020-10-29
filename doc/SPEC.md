@@ -33,8 +33,9 @@ ARP packages are contained by files with the extension `.arp`. The maximum file 
 ARP packages may be split into multiple files (parts) if desired. However, this must be explicitly declared in the
 header. A package may have up to 999 parts. The first part has index 1.
 
-Each part file must be named as follows: `<package name>.part###.arp`. For example, part 2 of package foo will be named
-`foo.part002.arp`. This naming convention is not required for the first part.
+Each part file must be named as follows, where `#` represents a digit of the part index: `<package name>.part###.arp`.
+For example, part 2 of package foo will be named `foo.part002.arp`. This naming convention is not required for the first
+part, which in this case may be named simply `foo.arp`.
 
 Each part must begin with a 16-byte [Part Header](#part-header) (described below). The body section corresponding to the
 part immediately follows this header.
@@ -51,7 +52,7 @@ Subsequent parts do not include the package header or directory structures, Inst
 
 #### Header
 
-The package header describes the meta-attributes of the ARP package. The structure is described below
+The package header describes the meta-attributes of the ARP package. The structure is described below.
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
@@ -60,12 +61,12 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0xA` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
 | `0xC` | `0x30` | Namespace | The package namespace as a string. |
 | `0x3C` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
-| `0x3E` | `0x22` | Reserved | Reserved for future use. |
-| `0x60`| `0x8` | Directory Offset | The offset in bytes of the directory section, starting from the beginning of the header. |
-| `0x68`| `0x8` | Directory Size | The length in bytes of the directory section. |
-| `0x70`| `0x8` | Body Offset | The offset in bytes of the body section, starting from the beginning of the header. This need not be contained by the first part if the package is split across multiple parts. |
-| `0x78`| `0x8` | Body Size | The length in bytes of the body section. |
-| `0x80` | `0x80` | Reserved | Reserved for future use |
+| `0x3E`| `0x8` | Catalogue Offset | The offset in bytes of the catalogue section, starting from the beginning of the package header. |
+| `0x46`| `0x8` | Catalogue Size | The length in bytes of the catalogue section. |
+| `0x4E` | `0x4` | Catalogue Count | The number of node descriptors contained by the catalogue. |
+| `0x52`| `0x8` | Body Offset | The offset in bytes of the body section of the first part, starting from the beginning of the package header. |
+| `0x5A`| `0x8` | Body Size | The length in bytes of the body section. |
+| `0x62` | `0x9E` | Reserved | Reserved for future use. |
 
 #### Part Header
 
@@ -75,21 +76,20 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x8` | `0x2` | Part Number | The index of this part. This must be between 2 and 999, inclusive. |
 | `0xA` | `0x6` | Reserved | Reserved for future use. |
 
-#### Directory
+#### Catalogue
 
-The directory structure begins with an 8-byte length value denoting the length of the structure, including the length
-prefix. The remainder of the structure is comprised of sequential directory entries which point to folders and resources
-in the package. The structure of a directory entry is described below.
+The catalogue structure is comprised of sequential node descriptors which point to directories and resources in the
+package. The structure of a node descriptor is described below.
 
-The first directory entry must describe the root folder of the package. This entry has the magic name `0x00` (a single
-`NUL` character).
+The first node descriptor must describe the root directory of the package. This entry has the magic name ""
+(empty string).
 
-##### Directory Entry
+##### Node Descriptor
 
-A directory entry describes and points to either a resource or another directory entry.
+A node descriptor describes and points to either a resource or a directory listing within a body section.
 
-Directory entries which point to resource data will contain the CRC-32 of the resource data. This will be ignored if the
-package specifies a compression scheme which already includes a CRC, such as `bzip2`.
+Nodes descriptors will contain the CRC-32 of the corresponding data. This may optionally be ignored by the unpacker if
+the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
 The maximum length for an entry name by design is 255 bytes.
 
@@ -98,10 +98,10 @@ The maximum length for an entry name by design is 255 bytes.
 | `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including the null terminator byte. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
 | `0x2` | `0x2` | Part index | The index of the package part containing the resource data. |
-| `0x4` | `0x8` | Data offset | The offset of this entry's data. This will be an offset into the directory section if the entry is a directory, or into the corresponding package part's body section otherwise. |
-| `0xC` | `0x8` | Data Length | The length of the resource in bytes. If this entry is a directory, this should be all zeroes. |
-| `0x14` | `0x4` | CRC | The CRC-32 of the entry data if this entry is a resource. If this entry is a directory, this field may be zeroed-out. |
-| `0x16` | variable | Entry Name | The name of this entry as a string. |
+| `0x4` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
+| `0xC` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
+| `0x14` | `0x4` | CRC | The CRC-32 of the node data. |
+| `0x18` | variable | Node Name | The name of this node as a string. |
 
 #### Body
 
@@ -110,6 +110,14 @@ according to the directory section.
 
 In the first package part, the corresponding body section begins at the offset defined in the package header. In
 subsequent parts, the body immediately follows the header.
+
+#### Directory Listing
+
+A directory listing describes the contents of a directory. The structure is extremely simple, containing only a
+tightly-packed array of 4-byte node descriptor indices.
+
+For example: the data [`0x01` `0x00` `0x00` `0x00` `0x02` `0x00` `0x00` `0x00`] specifies that the nodes with descriptor
+indices 1 and 2 in the 
 
 ## Magic Values
 
