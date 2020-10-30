@@ -7,18 +7,8 @@ ARP's full specification can be found in the [SPEC.md](doc/SPEC.md) file in this
 
 ## Compiling
 
-libarp includes optional features (enabled by default) which depend on [zlib](https://www.zlib.net/),
-[XZ Utils](https://tukaani.org/xz/), and [bzip2](https://www.sourceware.org/bzip2/). For convenience, these libraries
-are provided as git submodules within the repository and will be automatically built alongside the root project. If the
-respective features are not enabled, the libraries will not be built.
-
-| Feature flag | Required library | Description |
-| :-- | :-- | :-- |
-| FEATURE_PACK | N/A | Support for creating ARP packages from loose files |
-| FEATURE_UNPACK | N/A | Support for unpacking ARP packages into loose files |
-| FEATURE_DEFLATE | zlib | Support for (de)compression using the DEFLATE algorithm |
-| FEATURE_LZMA | XZ Utils (`liblzma`) | Support for (de)compression using the LZMA algorithm |
-| FEATURE_BZIP2 | bzip2 | Support for (de)compression using the bzip2 algorithm |
+libarp depends on [zlib](https://www.zlib.net/) for DEFLATE (de)compression support. This library is provided as a Git
+submodule within this repository and will be automatically built alongside the root project.
 
 To build:
 
