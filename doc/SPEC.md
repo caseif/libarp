@@ -63,7 +63,8 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x3C` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
 | `0x3E`| `0x8` | Catalogue Offset | The offset in bytes of the catalogue section, starting from the beginning of the package header. |
 | `0x46`| `0x8` | Catalogue Size | The length in bytes of the catalogue section. |
-| `0x4E` | `0x4` | Node Count | The number of node descriptors contained by the catalogue. |
+| `0x4E` | `0x3` | Node Count | The number of node descriptors contained by the catalogue. |
+| `0x51` | `0x1` | Unused | Unused by this version of the specification. |
 | `0x52`| `0x8` | Body Offset | The offset in bytes of the body section of the first part, starting from the beginning of the package header. |
 | `0x5A`| `0x8` | Body Size | The length in bytes of the body section. |
 | `0x62` | `0x9E` | Reserved | Reserved for future use. |
