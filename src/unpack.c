@@ -20,12 +20,45 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <memoryapi.h>
+#else
+#include <immintrin.h>
+#include <sys/mman.h>
 #endif
 
 #define MAX(a, b) (a > b ? a : b)
 
-#define COPY_TO_FIELD(src, dst, len, off) memcpy(&dst, src + off, len); off += len
-#define COPY_TO_FIELD_STR(src, dst, len, off) memcpy(dst, src + off, len); off += len
+static void copy_to_field(void *src, void *dst, size_t dst_len, size_t *src_off) {
+    memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
+
+    int x = 0;
+    if (((unsigned char*) &x)[0] == 0) {
+        // system is big-Endian, so we need to convert to little
+        #ifdef _WIN32
+        if (dst_len == 2) {
+            *((uint16_t*)dst) = _byteswap_ushort(*((uint16_t*) dst));
+        } else if (dst_len == 3 || dst_len == 4) {
+            *((uint32_t*)dst) = _byteswap_ulong(*((uint32_t*)dst));
+        } else if (dst_len == 8) {
+            *((uint64_t*)dst) = _byteswap_uint64(*((uint64_t*)dst));
+        }
+        #else
+        if (dst_len == 2) {
+            *((uint16_t*)dst) = __builtin_bswap16(*((uint16_t*) dst));
+        } else if (dst_len == 3 || dst_len == 4) {
+            *((uint32_t*)dst) = __builtin_bswap32(*((uint32_t*)dst));
+        } else if (dst_len == 8) {
+            *((uint64_t*)dst) = __builtin_bswap64(*((uint64_t*)dst));
+        }
+        #endif
+    }
+
+    *src_off += dst_len;
+}
+static void copy_to_field_str(void *src, void *dst, size_t dst_len, size_t *src_off) {
+    memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
+    *src_off += dst_len;
+}
 
 static int _parse_package_header(argus_package_t *pack, unsigned char header_data[PACKAGE_HEADER_LEN]) {
     size_t header_off = 0;
@@ -36,22 +69,21 @@ static int _parse_package_header(argus_package_t *pack, unsigned char header_dat
     }
     header_off += sizeof(FORMAT_MAGIC);
 
-    COPY_TO_FIELD(header_data, pack->major_version, PACKAGE_VERSION_LEN, header_off);
+    copy_to_field(header_data, &pack->major_version, PACKAGE_VERSION_LEN, &header_off);
 
     if (pack->major_version != 1) {
         libarp_set_error("Package version is not supported");
         return -1;
     }
 
-    //TODO: deal with endianness
-    COPY_TO_FIELD_STR(header_data, pack->compression_type, PACKAGE_COMPRESSION_LEN, header_off);
-    COPY_TO_FIELD_STR(header_data, pack->package_namespace, PACKAGE_NAMESPACE_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->total_parts, PACKAGE_PARTS_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->cat_off, PACKAGE_CAT_OFF_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->cat_len, PACKAGE_CAT_LEN_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->node_count, PACKAGE_CAT_CNT_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->body_off, PACKAGE_BODY_OFF_LEN, header_off);
-    COPY_TO_FIELD(header_data, pack->body_len, PACKAGE_BODY_LEN_LEN, header_off);
+    copy_to_field_str(header_data, &pack->compression_type, PACKAGE_COMPRESSION_LEN, &header_off);
+    copy_to_field_str(header_data, &pack->package_namespace, PACKAGE_NAMESPACE_LEN, &header_off);
+    copy_to_field(header_data, &pack->total_parts, PACKAGE_PARTS_LEN, &header_off);
+    copy_to_field(header_data, &pack->cat_off, PACKAGE_CAT_OFF_LEN, &header_off);
+    copy_to_field(header_data, &pack->cat_len, PACKAGE_CAT_LEN_LEN, &header_off);
+    copy_to_field(header_data, &pack->node_count, PACKAGE_CAT_CNT_LEN, &header_off);
+    copy_to_field(header_data, &pack->body_off, PACKAGE_BODY_OFF_LEN, &header_off);
+    copy_to_field(header_data, &pack->body_len, PACKAGE_BODY_LEN_LEN, &header_off);
 
     return 0;
 }
@@ -106,24 +138,45 @@ static int _validate_package_header(argus_package_t *pack, size_t pack_size) {
     return 0;
 }
 
-static int _parse_package_catalogue(argus_package_t *pack) {
-    node_desc_t **nodes = calloc(1, pack->node_count * sizeof(void*));
+static int _parse_package_catalogue(argus_package_t *pack, void *catalogue) {
+    node_desc_t **nodes;
+    if ((nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
+        libarp_set_error("calloc failed");
+        return -1;
+    }
 
-    //TODO
+    unsigned char *catalogue_ba = (unsigned char*) catalogue;
+    size_t cat_off = 0;
+    for (size_t i = 0; i < pack->node_count; i++) {
+        uint8_t name_len_s = catalogue_ba[cat_off] + 1;
+        
+        size_t desc_len = NODE_DESC_BASE_LEN + name_len_s + 1;
+        
+        if ((nodes[i] = (node_desc_t*) malloc(desc_len)) == NULL) {
+            free(nodes);
+
+            libarp_set_error("malloc failed");
+            return -1;
+        }
+
+        memcpy(nodes[i], (void*) ((uintptr_t) catalogue + cat_off), desc_len);
+    }
+
+    //TODO: build node hierarchy
 
     return 0;
 }
 
 int load_package_from_file(const char *path, ArgusPackage *package) {
-    FILE *file = fopen(path, "r");
+    FILE *package_file = fopen(path, "r");
 
-    if (file == NULL) {
+    if (package_file == NULL) {
         libarp_set_error("Failed to open package file");
         return -1;
     }
 
-    stat_t file_stat;
-    if (fstat(fileno(file), &file_stat) != 0) {
+    stat_t package_file_stat;
+    if (fstat(fileno(package_file), &package_file_stat) != 0) {
         libarp_set_error("Failed to stat package file");
         return -1;
     }
@@ -164,7 +217,11 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     }
 
     size_t stem_len_b = base_len_s - sizeof("." PACKAGE_EXT) + 1;
-    char *file_stem = malloc(stem_len_b);
+    char *file_stem;
+    if ((file_stem = malloc(stem_len_b)) == NULL) {
+        libarp_set_error("malloc failed");
+        return -1;
+    }
     memcpy(file_stem, file_base, stem_len_b - 1);
     file_stem[stem_len_b - 1] = '\0';
 
@@ -172,12 +229,22 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     size_t parent_dir_len_b;
     if (file_base != real_path) {
         parent_dir_len_b = file_base - real_path + 1;
-        parent_dir = malloc(parent_dir_len_b);
+        if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
+            free(file_stem);
+            
+            libarp_set_error("malloc failed");
+            return -1;
+        }
         memcpy(parent_dir, real_path, parent_dir_len_b - 1);
         parent_dir[parent_dir_len_b - 1] = '\0';
     } else {
         parent_dir_len_b = 1;
-        parent_dir = malloc(parent_dir_len_b);
+        if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
+            free(file_stem);
+            
+            libarp_set_error("malloc failed");
+            return -1;
+        }
         parent_dir[0] = '\0';
     }
 
@@ -185,12 +252,18 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     if (stem_len_b > sizeof(PACKAGE_PART_1_SUFFIX) - 1
             && memcmp(file_base + suffix_index, PACKAGE_PART_1_SUFFIX, sizeof(PACKAGE_PART_1_SUFFIX) - 1) == 0) {
         stem_len_b -= sizeof(PACKAGE_PART_1_SUFFIX);
-        file_stem = realloc(file_stem, stem_len_b);
+        if ((file_stem = realloc(file_stem, stem_len_b)) == NULL) {
+            free(parent_dir);
+            free(file_stem);
+
+            libarp_set_error("realloc failed");
+            return -1;
+        }
     }
 
-    size_t file_size = file_stat.st_size;
+    size_t package_file_size = package_file_stat.st_size;
 
-    if (file_size < PACKAGE_HEADER_LEN) {
+    if (package_file_size < PACKAGE_HEADER_LEN) {
         free(parent_dir);
         free(file_stem);
 
@@ -199,8 +272,9 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     }
 
     unsigned char pack_header[PACKAGE_HEADER_LEN];
+    memset(pack_header, 0, PACKAGE_HEADER_LEN);
 
-    if (fread(pack_header, PACKAGE_HEADER_LEN, 1, file) != 1) {
+    if (fread(pack_header, PACKAGE_HEADER_LEN, 1, package_file) != 1) {
         free(parent_dir);
         free(file_stem);
 
@@ -208,31 +282,71 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return -1;
     }
 
-    argus_package_t *pack = calloc(1, sizeof(argus_package_t));
+    argus_package_t *pack;
+    if ((pack = calloc(1, sizeof(argus_package_t))) != NULL) {
+        unload_package(pack);
+        free(parent_dir);
+        free(file_stem);
+        fclose(package_file);
+
+        libarp_set_error("calloc failed");
+        return -1;
+    }
 
     int rc;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         unload_package(pack);
         free(parent_dir);
         free(file_stem);
+        fclose(package_file);
 
         return rc;
     }
 
-    if ((rc = _validate_package_header(pack, file_size)) != 0) {
+    if ((rc = _validate_package_header(pack, package_file_size)) != 0) {
         unload_package(pack);
         free(parent_dir);
         free(file_stem);
+        fclose(package_file);
 
         return rc;
     }
 
-    pack->part_paths = calloc(1, sizeof(void*) * pack->total_parts);
+    if ((pack->part_paths = calloc(1, sizeof(void*) * pack->total_parts)) == NULL) {
+        unload_package(pack);
+        free(parent_dir);
+        free(file_stem);
+        fclose(package_file);
 
-    pack->part_paths[0] = malloc(base_len_s + 1);
+        libarp_set_error("calloc failed");
+        return -1;
+    }
+
+    if ((pack->part_paths[0] = malloc(base_len_s + 1)) == NULL) {
+        unload_package(pack);
+        free(parent_dir);
+        free(file_stem);
+        fclose(package_file);
+
+        libarp_set_error("malloc failed");
+        return -1;
+    }
 
     for (int i = 2; i <= pack->total_parts; i++) {
-        char *part_path = malloc(parent_dir_len_b - 1 + stem_len_b - 1 + sizeof(".part000") - 1 + sizeof("." PACKAGE_EXT));
+        char *part_path;
+        size_t part_path_len_b = parent_dir_len_b - 1
+                + stem_len_b - 1
+                + sizeof(".part000") - 1
+                + sizeof("." PACKAGE_EXT);
+        if ((part_path = malloc(part_path_len_b)) == NULL) {
+            unload_package(pack);
+            free(parent_dir);
+            free(file_stem);
+            fclose(package_file);
+
+            libarp_set_error("malloc failed");
+            return -1;
+        }
         sprintf(part_path, "%s%s.part%03d." PACKAGE_EXT, parent_dir, file_stem, i);
         
         pack->part_paths[i - 1] = part_path;
@@ -253,6 +367,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
@@ -264,6 +379,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
@@ -274,6 +390,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
@@ -285,6 +402,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
@@ -295,6 +413,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
@@ -306,15 +425,39 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
             unload_package(pack);
             free(parent_dir);
             free(file_stem);
+            fclose(package_file);
 
             return -1;
         }
     }
 
-    if ((rc = _parse_package_catalogue(pack)) != 0) {
+    void *catalogue;
+    #ifdef _WIN32
+    HANDLE file_mapping = CreateFileMappingA(package_file, NULL, PAGE_READONLY,
+            package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
+    LPVOID catalogue_base = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size);
+    catalogue = (void*) ((uintptr_t) catalogue_base + pack->cat_off);
+    #else
+    catalogue = mmap(NULL, pack->cat_len, PROT_READ, MAP_PRIVATE, fileno(package_file), pack->cat_off);
+    #endif
+
+    rc = _parse_package_catalogue(pack, catalogue);
+
+    #ifdef _WIN32
+    UnmapViewOfFile(catalogue_base);
+    // An great exmaple of why the Win32 API sucks. Why would you want one
+    // function to deal with 19 different types of handles? It just makes
+    // for more ambiguous code.
+    CloseHandle(file_mapping);
+    #else
+    munmap(catalogue, pack->cat_len);
+    #endif
+
+    if (rc != 0) {
         unload_package(pack);
         free(parent_dir);
         free(file_stem);
+        fclose(package_file);
 
         return rc;
     }

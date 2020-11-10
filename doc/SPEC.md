@@ -98,7 +98,7 @@ The maximum length for an entry name by design is 255 bytes.
 | --: | --: | :-: | :-- |
 | `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including the null terminator byte. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
-| `0x2` | `0x2` | Part index | The index of the package part containing the resource data. |
+| `0x2` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x4` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
 | `0xC` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
 | `0x14` | `0x4` | CRC | The CRC-32 of the node data. |
@@ -117,8 +117,11 @@ subsequent parts, the body immediately follows the header.
 A directory listing describes the contents of a directory. The structure is extremely simple, containing only a
 tightly-packed array of 4-byte node descriptor indices.
 
-For example: the data [`0x01` `0x00` `0x00` `0x00` `0x02` `0x00` `0x00` `0x00`] specifies that the nodes with descriptor
-indices 1 and 2 in the 
+For example: the data [`0x01` `0x00` `0x00` `0x00` `0x02` `0x00` `0x00` `0x00`] specifies that the directory contains
+the nodes with descriptor indices 1 and 2 in the catalogue.
+
+All directory listings must be defined in the first part of the package. As such, a package containing node descriptors
+with type directory and a part index other than `1` is illegal and may not load successfully.
 
 ## Magic Values
 
