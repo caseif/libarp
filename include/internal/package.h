@@ -63,7 +63,7 @@ typedef struct ArgusPack {
     uint16_t total_parts;
     uint64_t cat_off;
     uint64_t cat_len;
-    uint64_t node_count;
+    uint32_t node_count;
     uint64_t body_off;
     uint64_t body_len;
     node_desc_t **all_nodes;

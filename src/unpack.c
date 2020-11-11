@@ -68,7 +68,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
         libarp_set_error("Package magic is incorrect");
         return -1;
     }
-    header_off += sizeof(FORMAT_MAGIC);
+    header_off += PACKAGE_MAGIC_LEN;
 
     copy_to_field(header_data, &pack->major_version, PACKAGE_VERSION_LEN, &header_off);
 
@@ -361,7 +361,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
     unsigned char *body = (unsigned char*) ((uintptr_t) pack_data_view + pack->body_off);
 
-    for (size_t i = 0; i < pack->node_count; i++) {
+    for (uint64_t i = 0; i < pack->node_count; i++) {
         node_desc_t *node = pack->all_nodes[i];
         
         if (node->entry_type != NODE_TYPE_DIRECTORY) {
@@ -370,7 +370,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
         uint64_t child_count = node->data_length / 4;
 
-        for (size_t j = 0; j < node->data_length / 4; j++) {
+        for (uint64_t j = 0; j < node->data_length / 4; j++) {
             uint32_t child_index =  *((uint32_t*) ((uintptr_t) body + node->data_offset + j * 4));
         }
     }
@@ -520,7 +520,7 @@ int unload_package(ArgusPackage package) {
     argus_package_t *real_pack = (argus_package_t*)package;
 
     if (real_pack->all_nodes != NULL) {
-        for (size_t i = 0; i < real_pack->node_count; i++) {
+        for (uint32_t i = 0; i < real_pack->node_count; i++) {
             node_desc_t *node = (real_pack->all_nodes)[i];
             if (node != NULL) {
                 free(node);
@@ -530,7 +530,7 @@ int unload_package(ArgusPackage package) {
         free(real_pack->all_nodes);
     }
 
-    for (size_t i = 0; i < real_pack->total_parts; i++) {
+    for (uint16_t i = 0; i < real_pack->total_parts; i++) {
         char *part_path = real_pack->part_paths[i];
         if (part_path == NULL) {
             break;
