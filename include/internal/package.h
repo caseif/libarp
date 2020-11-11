@@ -52,7 +52,7 @@ typedef struct NodeDesc {
     uint64_t data_length;
     uint32_t crc;
 
-    bt_node_t children_tree;
+    bt_node_t *children_tree;
     char entry_name[];
 } node_desc_t;
 

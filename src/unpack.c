@@ -27,6 +27,7 @@
 #include <sys/mman.h>
 #endif
 
+#define MIN(a, b) (a < b ? a : b)
 #define MAX(a, b) (a > b ? a : b)
 
 static void copy_to_field(const void *src, void *dst, const size_t dst_len, size_t *src_off) {
@@ -307,6 +308,10 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     return part_err ? -1 : 0;
 }
 
+static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
+    return memcmp(a->entry_name, b->entry_name, MIN(a->name_length, b->name_length));
+}
+
 static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
         libarp_set_error("calloc failed");
@@ -369,9 +374,25 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         }
 
         uint64_t child_count = node->data_length / 4;
+        uint32_t *node_children = (uint32_t*) ((uintptr_t) body + node->data_offset);
 
-        for (uint64_t j = 0; j < node->data_length / 4; j++) {
-            uint32_t child_index =  *((uint32_t*) ((uintptr_t) body + node->data_offset + j * 4));
+        if ((node->children_tree = calloc(1, sizeof(bt_node_t) * (child_count + 1))) == NULL) {
+            libarp_set_error("calloc failed");
+            return -1;
+        }
+
+        for (uint64_t j = 0; j < child_count; j++) {
+            uint32_t child_index = node_children[j];
+
+            if (child_index == 0 || child_index >= pack->node_count) {
+                libarp_set_error("Illegal node index in directory");
+                return -1;
+            }
+
+            bt_node_t *root = j > 0 ? &node->children_tree[0] : NULL;
+            bt_node_t *storage = &node->children_tree[j];
+            bt_insert(root, storage, pack->all_nodes[child_index],
+                    (int (*)(const void*, const void*)) _compare_node_names);
         }
     }
 
@@ -523,6 +544,7 @@ int unload_package(ArgusPackage package) {
         for (uint32_t i = 0; i < real_pack->node_count; i++) {
             node_desc_t *node = (real_pack->all_nodes)[i];
             if (node != NULL) {
+                free(node->children_tree);
                 free(node);
             }
         }

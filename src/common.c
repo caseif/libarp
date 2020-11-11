@@ -4,6 +4,12 @@
 #include "libarp/common.h"
 #include "internal/util.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <signal.h>
+#endif
+
 char err_msg[256];
 
 const char *libarp_get_error(void) {
@@ -18,4 +24,10 @@ void libarp_set_error(const char *msg) {
     }
 
     memcpy(err_msg, msg, msg_len + 1);
+
+    #ifdef _WIN32
+    __debugbreak();
+    #else
+    raise(SIGTRAP);
+    #endif
 }
