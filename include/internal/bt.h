@@ -1,7 +1,9 @@
 #pragma once
 
-typedef struct {
-    bt_node_t *l;
-    bt_node_t *r;
+struct BtNode;
+
+typedef struct BtNode {
+    struct BtNode *l;
+    struct BtNode *r;
     void *data;
 } bt_node_t;

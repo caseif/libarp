@@ -13,6 +13,7 @@
 #include "internal/util.h"
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,7 @@
 
 #define MAX(a, b) (a > b ? a : b)
 
-static void copy_to_field(void *src, void *dst, size_t dst_len, size_t *src_off) {
+static void copy_to_field(const void *src, void *dst, const size_t dst_len, size_t *src_off) {
     memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
 
     int x = 0;
@@ -55,12 +56,12 @@ static void copy_to_field(void *src, void *dst, size_t dst_len, size_t *src_off)
 
     *src_off += dst_len;
 }
-static void copy_to_field_str(void *src, void *dst, size_t dst_len, size_t *src_off) {
+static void copy_to_field_str(const void *src, void *dst, const size_t dst_len, size_t *src_off) {
     memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
     *src_off += dst_len;
 }
 
-static int _parse_package_header(argus_package_t *pack, unsigned char header_data[PACKAGE_HEADER_LEN]) {
+static int _parse_package_header(argus_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
     size_t header_off = 0;
 
     if (memcmp(header_data, FORMAT_MAGIC, PACKAGE_MAGIC_LEN) != 0) {
@@ -88,7 +89,7 @@ static int _parse_package_header(argus_package_t *pack, unsigned char header_dat
     return 0;
 }
 
-static int _validate_package_header(argus_package_t *pack, size_t pack_size) {
+static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
         libarp_set_error("Package compression is not supported");
@@ -138,53 +139,11 @@ static int _validate_package_header(argus_package_t *pack, size_t pack_size) {
     return 0;
 }
 
-static int _parse_package_catalogue(argus_package_t *pack, void *catalogue) {
-    node_desc_t **nodes;
-    if ((nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
-        libarp_set_error("calloc failed");
-        return -1;
-    }
-
-    unsigned char *catalogue_ba = (unsigned char*) catalogue;
-    size_t cat_off = 0;
-    for (size_t i = 0; i < pack->node_count; i++) {
-        uint8_t name_len_s = catalogue_ba[cat_off] + 1;
-        
-        size_t desc_len = NODE_DESC_BASE_LEN + name_len_s + 1;
-        
-        if ((nodes[i] = (node_desc_t*) malloc(desc_len)) == NULL) {
-            free(nodes);
-
-            libarp_set_error("malloc failed");
-            return -1;
-        }
-
-        memcpy(nodes[i], (void*) ((uintptr_t) catalogue + cat_off), desc_len);
-    }
-
-    //TODO: build node hierarchy
-
-    return 0;
-}
-
-int load_package_from_file(const char *path, ArgusPackage *package) {
-    FILE *package_file = fopen(path, "r");
-
-    if (package_file == NULL) {
-        libarp_set_error("Failed to open package file");
-        return -1;
-    }
-
-    stat_t package_file_stat;
-    if (fstat(fileno(package_file), &package_file_stat) != 0) {
-        libarp_set_error("Failed to stat package file");
-        return -1;
-    }
-
+static int _validate_part_files(argus_package_t *pack, const char *primary_path) {
     #ifdef _WIN32
-    char *real_path = _fullpath(NULL, path, size_t(-1));
+    char *real_path = _fullpath(NULL, primary_path, size_t(-1));
     #else
-    char *real_path = realpath(path, NULL);
+    char *real_path = realpath(primary_path, NULL);
     #endif
     if (real_path == NULL) {
         libarp_set_error("Failed to get absolute path of package file");
@@ -261,77 +220,15 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         }
     }
 
-    size_t package_file_size = package_file_stat.st_size;
-
-    if (package_file_size < PACKAGE_HEADER_LEN) {
-        free(parent_dir);
-        free(file_stem);
-
-        libarp_set_error("File is too small to contain package header");
-        return -1;
-    }
-
-    unsigned char pack_header[PACKAGE_HEADER_LEN];
-    memset(pack_header, 0, PACKAGE_HEADER_LEN);
-
-    if (fread(pack_header, PACKAGE_HEADER_LEN, 1, package_file) != 1) {
-        free(parent_dir);
-        free(file_stem);
-
-        libarp_set_error("Failed to read package header from file");
-        return -1;
-    }
-
-    argus_package_t *pack;
-    if ((pack = calloc(1, sizeof(argus_package_t))) != NULL) {
-        unload_package(pack);
-        free(parent_dir);
-        free(file_stem);
-        fclose(package_file);
-
-        libarp_set_error("calloc failed");
-        return -1;
-    }
-
-    int rc;
-    if ((rc = _parse_package_header(pack, pack_header)) != 0) {
-        unload_package(pack);
-        free(parent_dir);
-        free(file_stem);
-        fclose(package_file);
-
-        return rc;
-    }
-
-    if ((rc = _validate_package_header(pack, package_file_size)) != 0) {
-        unload_package(pack);
-        free(parent_dir);
-        free(file_stem);
-        fclose(package_file);
-
-        return rc;
-    }
-
-    if ((pack->part_paths = calloc(1, sizeof(void*) * pack->total_parts)) == NULL) {
-        unload_package(pack);
-        free(parent_dir);
-        free(file_stem);
-        fclose(package_file);
-
-        libarp_set_error("calloc failed");
-        return -1;
-    }
-
     if ((pack->part_paths[0] = malloc(base_len_s + 1)) == NULL) {
-        unload_package(pack);
         free(parent_dir);
         free(file_stem);
-        fclose(package_file);
 
         libarp_set_error("malloc failed");
         return -1;
     }
 
+    bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
         char *part_path;
         size_t part_path_len_b = parent_dir_len_b - 1
@@ -339,13 +236,10 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
                 + sizeof(".part000") - 1
                 + sizeof("." PACKAGE_EXT);
         if ((part_path = malloc(part_path_len_b)) == NULL) {
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
             libarp_set_error("malloc failed");
-            return -1;
+
+            part_err = true;
+            break;
         }
         sprintf(part_path, "%s%s.part%03d." PACKAGE_EXT, parent_dir, file_stem, i);
         
@@ -364,100 +258,226 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
                 libarp_set_error("Error occurred accesing part file for package");
             }
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
-            return -1;
+            part_err = true;
+            break;
         }
 
         stat_t part_stat;
         if (fstat(fileno(part_file), &part_stat) != 0) {
             libarp_set_error("Failed to stat package part file");
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
-            return -1;
+            part_err = true;
+            break;
         }
 
         if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
             libarp_set_error("Package part file is too small");
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
-            return -1;
+            part_err = true;
+            break;
         }
 
         unsigned char part_header[PACKAGE_PART_HEADER_LEN];
         if (fread(part_header, PACKAGE_PART_HEADER_LEN, 1, part_file) != 0) {
             libarp_set_error("Failed to read package part header");
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
-            return -1;
+            part_err = true;
+            break;
         }
 
         if (memcmp(part_header, PART_MAGIC, PART_MAGIC_LEN) != 0) {
             libarp_set_error("Package part magic is invalid");
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
-
-            return -1;
+            part_err = true;
+            break;
         }
 
         uint16_t part_index = part_header[PART_MAGIC_LEN] | part_header[PART_MAGIC_LEN + 1] << 8;
         if (part_index != i) {
             libarp_set_error("Package part index is incorrect");
             
-            unload_package(pack);
-            free(parent_dir);
-            free(file_stem);
-            fclose(package_file);
+            part_err = true;
+            break;
+        }
+    }
+    
+    free(file_stem);
+    free(parent_dir);
 
+    return part_err ? -1 : 0;
+}
+
+static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view) {
+    if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
+        libarp_set_error("calloc failed");
+        return -1;
+    }
+
+    unsigned char *catalogue = (unsigned char*) ((uintptr_t) pack_data_view + pack->cat_off);
+    size_t cat_off = 0;
+    for (size_t i = 0; i < pack->node_count; i++) {
+        uint8_t name_len_s = catalogue[cat_off];
+
+        if (i == 0 && name_len_s > 0) {
+            libarp_set_error("Root node name must be empty string");
             return -1;
+        }
+
+        size_t desc_len = sizeof(node_desc_t) + name_len_s + 1;
+        
+        if ((pack->all_nodes[i] = (node_desc_t*) malloc(desc_len)) == NULL) {
+            libarp_set_error("malloc failed");
+            return -1;
+        }
+
+        node_desc_t *node = pack->all_nodes[i];
+
+        memcpy(node, (void*) ((uintptr_t) catalogue + cat_off), NODE_DESC_BASE_LEN);
+        memcpy(node->entry_name, (void*) ((uintptr_t) catalogue + cat_off + NODE_DESC_BASE_LEN), name_len_s);
+        node->entry_name[name_len_s] = '\0';
+
+        if (node->entry_type != NODE_TYPE_RESOURCE && node->entry_type != NODE_TYPE_DIRECTORY) {
+            libarp_set_error("Invalid node type");
+            return -1;
+        }
+
+        if (node->entry_type == NODE_TYPE_DIRECTORY) {
+            if (node->part_index != 1) {
+                libarp_set_error("Directory node content must be in primary part");
+                return -1;
+            }
+
+            if ((node->data_length % 4) != 0) {
+                libarp_set_error("Directory content length must be divisible by 4");
+                return -1;
+            }
+
+            if (node->data_length > DIRECTORY_CONTENT_MAX_LEN) {
+                libarp_set_error("Directory contains too many files");
+                return -1;
+            }
         }
     }
 
-    void *catalogue;
+    unsigned char *body = (unsigned char*) ((uintptr_t) pack_data_view + pack->body_off);
+
+    for (size_t i = 0; i < pack->node_count; i++) {
+        node_desc_t *node = pack->all_nodes[i];
+        
+        if (node->entry_type != NODE_TYPE_DIRECTORY) {
+            continue;
+        }
+
+        uint64_t child_count = node->data_length / 4;
+
+        for (size_t j = 0; j < node->data_length / 4; j++) {
+            uint32_t child_index =  *((uint32_t*) ((uintptr_t) body + node->data_offset + j * 4));
+        }
+    }
+
+    return 0;
+}
+
+int load_package_from_file(const char *path, ArgusPackage *package) {
+    FILE *package_file = fopen(path, "r");
+
+    if (package_file == NULL) {
+        fclose(package_file);
+
+        libarp_set_error("Failed to open package file");
+        return -1;
+    }
+
+    stat_t package_file_stat;
+    if (fstat(fileno(package_file), &package_file_stat) != 0) {
+        fclose(package_file);
+
+        libarp_set_error("Failed to stat package file");
+        return -1;
+    }
+
+    size_t package_file_size = package_file_stat.st_size;
+
+    if (package_file_size < PACKAGE_HEADER_LEN) {
+        fclose(package_file);
+
+        libarp_set_error("File is too small to contain package header");
+        return -1;
+    }
+
+    unsigned char pack_header[PACKAGE_HEADER_LEN];
+    memset(pack_header, 0, PACKAGE_HEADER_LEN);
+
+    if (fread(pack_header, PACKAGE_HEADER_LEN, 1, package_file) != 1) {
+        fclose(package_file);
+
+        libarp_set_error("Failed to read package header from file");
+        return -1;
+    }
+
+    argus_package_t *pack;
+    if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
+        fclose(package_file);
+
+        libarp_set_error("calloc failed");
+        return -1;
+    }
+
+    int rc;
+    if ((rc = _parse_package_header(pack, pack_header)) != 0) {
+        unload_package(pack);
+        fclose(package_file);
+
+        return rc;
+    }
+
+    if ((rc = _validate_package_header(pack, package_file_size)) != 0) {
+        unload_package(pack);
+        fclose(package_file);
+
+        return rc;
+    }
+
+    if ((pack->part_paths = calloc(1, sizeof(void*) * pack->total_parts)) == NULL) {
+        unload_package(pack);
+        fclose(package_file);
+
+        libarp_set_error("calloc failed");
+        return -1;
+    }
+
+    if ((rc = _validate_part_files(pack, path)) != 0) {
+        unload_package(pack);
+        fclose(package_file);
+
+        return -1;
+    }
+
+    void *pack_data_view;
     #ifdef _WIN32
     HANDLE file_mapping = CreateFileMappingA(package_file, NULL, PAGE_READONLY,
             package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
-    LPVOID catalogue_base = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size);
-    catalogue = (void*) ((uintptr_t) catalogue_base + pack->cat_off);
+    pack_data_view = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size);
     #else
-    catalogue = mmap(NULL, pack->cat_len, PROT_READ, MAP_PRIVATE, fileno(package_file), pack->cat_off);
+    pack_data_view = mmap(NULL, package_file_size, PROT_READ, MAP_PRIVATE, fileno(package_file), 0);
     #endif
 
-    rc = _parse_package_catalogue(pack, catalogue);
+    rc = _parse_package_catalogue(pack, pack_data_view);
 
     #ifdef _WIN32
-    UnmapViewOfFile(catalogue_base);
+    UnmapViewOfFile(pack_data_view);
     // An great exmaple of why the Win32 API sucks. Why would you want one
     // function to deal with 19 different types of handles? It just makes
     // for more ambiguous code.
     CloseHandle(file_mapping);
     #else
-    munmap(catalogue, pack->cat_len);
+    munmap(pack_data_view, pack->cat_len);
     #endif
+
+    fclose(package_file);
 
     if (rc != 0) {
         unload_package(pack);
-        free(parent_dir);
-        free(file_stem);
-        fclose(package_file);
 
         return rc;
     }
@@ -468,7 +488,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
 
 int load_package_from_memory(const unsigned char *data, size_t package_len, ArgusPackage *package) {
     if (package_len < PACKAGE_HEADER_LEN) {
-        libarp_set_error("File is too small to contain package header");
+        libarp_set_error("Package is too small to contain package header");
         return -1;
     }
 
@@ -498,6 +518,17 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
 
 int unload_package(ArgusPackage package) {
     argus_package_t *real_pack = (argus_package_t*)package;
+
+    if (real_pack->all_nodes != NULL) {
+        for (size_t i = 0; i < real_pack->node_count; i++) {
+            node_desc_t *node = (real_pack->all_nodes)[i];
+            if (node != NULL) {
+                free(node);
+            }
+        }
+
+        free(real_pack->all_nodes);
+    }
 
     for (size_t i = 0; i < real_pack->total_parts; i++) {
         char *part_path = real_pack->part_paths[i];

@@ -96,13 +96,13 @@ The maximum length for an entry name by design is 255 bytes.
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
-| `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including the null terminator byte. |
+| `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including a null terminator. |
 | `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
 | `0x2` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x4` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
 | `0xC` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
 | `0x14` | `0x4` | CRC | The CRC-32 of the node data. |
-| `0x18` | variable | Node Name | The name of this node as a string. |
+| `0x18` | variable | Node Name | The name of this node as a string, not including a null terminator. |
 
 #### Body
 

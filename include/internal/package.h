@@ -1,5 +1,7 @@
 #pragma once
 
+#include "internal/bt.h"
+
 #include <stdint.h>
 
 #define PACKAGE_EXT "arp"
@@ -35,7 +37,26 @@
 
 #define NODE_DESC_BASE_LEN 0x18
 
-typedef struct {
+#define NODE_DESCRIPTOR_INDEX_LEN 4
+
+#define NODE_TYPE_RESOURCE 0
+#define NODE_TYPE_DIRECTORY 1
+
+#define DIRECTORY_CONTENT_MAX_LEN 4294967296 * 4 // we need _some_ sane limit
+
+typedef struct NodeDesc {
+    uint8_t name_length;
+    uint8_t entry_type;
+    uint16_t part_index;
+    uint64_t data_offset;
+    uint64_t data_length;
+    uint32_t crc;
+
+    bt_node_t children_tree;
+    char entry_name[];
+} node_desc_t;
+
+typedef struct ArgusPack {
     uint16_t major_version;
     char compression_type[PACKAGE_COMPRESSION_LEN];
     char package_namespace[PACKAGE_NAMESPACE_LEN];
@@ -45,18 +66,9 @@ typedef struct {
     uint64_t node_count;
     uint64_t body_off;
     uint64_t body_len;
+    node_desc_t **all_nodes;
     char **part_paths;
 } argus_package_t;
-
-typedef struct {
-    uint8_t name_length;
-    uint8_t entry_type;
-    uint16_t part_index;
-    uint64_t data_offset;
-    uint64_t data_length;
-    uint32_t crc;
-    char entry_name[];
-} node_desc_t;
 
 node_desc_t *create_dir_entry_dir(uint8_t name_length, char *name, uint64_t data_offset);
 
