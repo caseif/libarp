@@ -69,6 +69,9 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x5A`| `0x8` | Body Size | The length in bytes of the body section. |
 | `0x62` | `0x9E` | Reserved | Reserved for future use. |
 
+The package namespace may not contain the characters `/` (forward slash), `\` (back slash), `:` (colon), , nor any
+control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
+
 #### Part Header
 
 | Offset | Length | Name | Description |
@@ -82,7 +85,7 @@ The package header describes the meta-attributes of the ARP package. The structu
 The catalogue structure is comprised of sequential node descriptors which point to directories and resources in the
 package. The structure of a node descriptor is described below.
 
-The first node descriptor must describe the root directory of the package. This entry has the magic name ""
+The first node descriptor must describe the root directory of the package. This node has the magic name ""
 (empty string).
 
 ##### Node Descriptor
@@ -92,12 +95,15 @@ A node descriptor describes and points to either a resource or a directory listi
 Nodes descriptors will contain the CRC-32 of the corresponding data. This may optionally be ignored by the unpacker if
 the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
-The maximum length for an entry name by design is 255 bytes.
+The maximum length for an node name by design is 255 bytes.
+
+Node names may not contain the characters `/` (forward slash), `\` (back slash), or `:` (colon), nor any control
+characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
-| `0x0` | `0x1` | Name Length | The length of the entry name in bytes, not including a null terminator. |
-| `0x1` | `0x1` | Entry Type | The type of the entry. `0` for resource, `1` for directory. |
+| `0x0` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
+| `0x1` | `0x1` | Node Type | The type of the node. `0` for resource, `1` for directory. |
 | `0x2` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x4` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
 | `0xC` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
@@ -151,6 +157,8 @@ speed.
 
 Generators need not limit themselves to these values if they wish to use other compression schemes, but
 decompression support is not guaranteed by the specification.
+
+Compression magic must not contain ASCII control characters.
 
 | Magic | Compression Type |
 | :-- | :-- |
