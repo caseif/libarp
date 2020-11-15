@@ -35,7 +35,11 @@
 
 #define PACKAGE_PART_1_SUFFIX ".part001"
 
-#define NODE_DESC_BASE_LEN 0x18
+#define NODE_DESC_BASE_LEN 0x19
+#define NODE_DESC_MIN_LEN 0x1B
+#define NODE_NAME_MAX_LEN 0xFF
+#define NODE_MIME_MAX_LEN 0xFF
+#define NODE_DESC_MAX_LEN (NODE_DESC_MIN_LEN + NODE_NAME_MAX_LEN + NODE_MIME_MAX_LEN)
 
 #define NODE_DESCRIPTOR_INDEX_LEN 4
 
@@ -44,22 +48,28 @@
 
 #define DIRECTORY_CONTENT_MAX_LEN 4294967296 * 4 // we need _some_ sane limit
 
-typedef struct NodeDesc {
-    uint8_t name_length;
-    uint8_t entry_type;
-    uint16_t part_index;
-    uint64_t data_offset;
-    uint64_t data_length;
-    uint32_t crc;
+#define NAMESPACE_DELIM ':'
+#define PATH_DELIM '/'
 
+typedef struct NodeDesc {
+    uint8_t type;
+    uint16_t part_index;
+    uint64_t data_off;
+    uint64_t data_len;
+    uint32_t crc;
+    uint8_t name_len_s;
+    char *name;
+    uint8_t mime_len_s;
+    char *mime_type;
+
+    arp_resource_t *loaded_data;
     bt_node_t *children_tree;
-    char entry_name[];
 } node_desc_t;
 
 typedef struct ArgusPack {
     uint16_t major_version;
-    char compression_type[PACKAGE_COMPRESSION_LEN];
-    char package_namespace[PACKAGE_NAMESPACE_LEN];
+    char compression_type[PACKAGE_COMPRESSION_LEN + 1];
+    char package_namespace[PACKAGE_NAMESPACE_LEN + 1];
     uint16_t total_parts;
     uint64_t cat_off;
     uint64_t cat_len;
