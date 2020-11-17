@@ -15,6 +15,7 @@
 
 #include <errno.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -170,14 +171,14 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
 
     // _b = buffer length, includes null terminator
     // _s = string length, does not include null terminator
-    size_t base_len_s = strlen(file_base);
+    size_t file_base_len_s = strlen(file_base);
 
-    if (memcmp(file_base + base_len_s - sizeof("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
+    if (memcmp(file_base + file_base_len_s - sizeof("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
         libarp_set_error("Unexpected file extension for primary package file");
         return -1;
     }
 
-    size_t stem_len_b = base_len_s - sizeof("." PACKAGE_EXT) + 1;
+    size_t stem_len_b = file_base_len_s - sizeof("." PACKAGE_EXT) + 1;
     char *file_stem;
     if ((file_stem = malloc(stem_len_b)) == NULL) {
         libarp_set_error("malloc failed");
@@ -222,13 +223,16 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         }
     }
 
-    if ((pack->part_paths[0] = malloc(base_len_s + 1)) == NULL) {
+    if ((pack->part_paths[0] = malloc(file_base_len_s + 1)) == NULL) {
         free(parent_dir);
         free(file_stem);
 
         libarp_set_error("malloc failed");
         return -1;
     }
+
+    memcpy(pack->part_paths[0], file_base, file_base_len_s);
+    pack->part_paths[file_base_len_s] = '\0';
 
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
@@ -266,6 +270,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
 
         stat_t part_stat;
         if (fstat(fileno(part_file), &part_stat) != 0) {
+            fclose(part_file);
+
             libarp_set_error("Failed to stat package part file");
             
             part_err = true;
@@ -273,6 +279,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         }
 
         if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
+            fclose(part_file);
+
             libarp_set_error("Package part file is too small");
             
             part_err = true;
@@ -281,11 +289,15 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
 
         unsigned char part_header[PACKAGE_PART_HEADER_LEN];
         if (fread(part_header, PACKAGE_PART_HEADER_LEN, 1, part_file) != 0) {
+            fclose(part_file);
+
             libarp_set_error("Failed to read package part header");
             
             part_err = true;
             break;
         }
+
+        fclose(part_file);
 
         if (memcmp(part_header, PART_MAGIC, PART_MAGIC_LEN) != 0) {
             libarp_set_error("Package part magic is invalid");
@@ -454,9 +466,9 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
                 libarp_set_error("malloc failed");
                 return -1;
             }
-            memcpy(node->mime, node_mime_tmp, node->mime_len_s + 1);
+            memcpy(node->mime_type, node_mime_tmp, node->mime_len_s + 1);
         } else {
-            node->mime = NULL;
+            node->mime_type = NULL;
         }
 
         _validate_path_component(node->name, node->name_len_s);
@@ -674,8 +686,8 @@ void _unload_node(node_desc_t *node) {
             free(node->name);
         }
 
-        if (node->mime != NULL) {
-            free(node->mime);
+        if (node->mime_type != NULL) {
+            free(node->mime_type);
         }
         
         free(node);
@@ -722,7 +734,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     const char *path_copy = malloc(path_len_s + 1);
     memcpy(path_copy, path, path_len_s + 1);
-    char *path_tail;
+    char *path_tail = path_copy;
     size_t cursor = 0;
 
     if ((cursor = strchr(path_tail, NAMESPACE_DELIM)) == NULL) {
@@ -774,26 +786,80 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         return NULL;
     }
 
+    free(path_copy);
+
     cur_node = (node_desc_t*) found->data;
 
     if (cur_node->type == NODE_TYPE_DIRECTORY) {
-        free(path_copy);
-
         libarp_set_error("Requested path points to directory");
+        return NULL;
+    }
+
+    if (cur_node->loaded_data != NULL) {
+        return (arp_resource_t*) cur_node->loaded_data;
     }
 
     arp_resource_t *res;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
-        free(path_copy);
-
         libarp_set_error("malloc failed");
         return NULL;
     }
 
     res->len = cur_node->data_len;
     res->extra = cur_node;
-
     cur_node->loaded_data = res;
+
+    if (cur_node->part_index > real_pack->total_parts) {
+        unload_resource(res);
+
+        libarp_set_error("Node part index is invalid");
+        return NULL;
+    }
+
+    FILE *part_file = fopen(real_pack->part_paths[cur_node->part_index - 1], "r");
+    if (part_file == NULL) {
+        unload_resource(res);
+
+        libarp_set_error("Failed to open part file");
+        return NULL;
+    }
+
+    stat_t part_stat;
+    if (fstat(fileno(part_file), &part_stat) != 0) {
+        fclose(part_file);
+        unload_resource(res);
+
+        libarp_set_error("Failed to stat part file");
+        return NULL;
+    }
+
+    if (part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
+        fclose(part_file);
+        unload_resource(res);
+
+        libarp_set_error("Part file is too small to fit node data");
+        return NULL;
+    }
+
+    if ((res->data = malloc(cur_node->data_len)) == NULL) {
+        fclose(part_file);
+        unload_resource(res);
+
+        libarp_set_error("malloc failed");
+        return NULL;
+    }
+
+    fseek(part_file, PACKAGE_PART_HEADER_LEN + cur_node->data_off, SEEK_SET);
+
+    if ((fread(res->data, cur_node->data_len, 1, part_file)) != 1) {
+        fclose(part_file);
+        unload_resource(res);
+
+        libarp_set_error("Failed to read from part file");
+        return NULL;
+    }
+
+    fclose(part_file);
 
     return res;
 }
@@ -807,9 +873,7 @@ void unload_resource(arp_resource_t *resource) {
         free(resource->data);
     }
 
-    if (resource->extra != NULL) {
-        ((node_desc_t*) resource->extra)->loaded_data = NULL;
-    }
+    ((node_desc_t*) resource->extra)->loaded_data = NULL;
 
     free(resource);
 }
