@@ -7,6 +7,65 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#include "libarp/common.h"
 #include "libarp/pack.h"
+#include "internal/package.h"
+#include "internal/util.h"
 
-//TODO
+#include <stdlib.h>
+#include <string.h>
+
+arp_packing_options_t *create_v1_packing_options(char *pack_name, char *pack_namespace, size_t max_part_len,
+        char *compression_type) {
+    size_t name_len = strlen(pack_name);
+    size_t namespace_len = strlen(pack_namespace);
+    size_t compression_type_len = strlen(compression_type);
+
+    if (namespace_len > PACKAGE_NAMESPACE_LEN) {
+        libarp_set_error("Namespace length is too long");
+        return NULL;
+    }
+
+    if (compression_type_len > PACKAGE_COMPRESSION_LEN) {
+        libarp_set_error("Compression type magic is too long");
+        return NULL;
+    }
+
+    arp_packing_options_t *opts = calloc(1, sizeof(arp_packing_options_t));
+    opts->pack_name = malloc(name_len + 1);
+    opts->pack_namespace = malloc(PACKAGE_NAMESPACE_LEN + 1);
+    opts->compression_type = malloc(PACKAGE_COMPRESSION_LEN + 1);
+
+    memcpy(opts->pack_name, pack_name, name_len + 1);
+    memcpy(opts->pack_namespace, pack_name, namespace_len + 1);
+    memcpy(opts->compression_type, pack_name, compression_type_len + 1);
+
+    opts->max_part_len = max_part_len;
+
+    return opts;
+}
+
+void release_packing_options(arp_packing_options_t *opts) {
+    if (opts == NULL) {
+        return;
+    }
+
+    if (opts->pack_name != NULL) {
+        free(opts->pack_name);
+    }
+
+    if (opts->pack_namespace != NULL) {
+        free(opts->pack_namespace);
+    }
+
+    if (opts->compression_type != NULL) {
+        free(opts->compression_type);
+    }
+
+    free(opts);
+}
+
+int create_arp_from_fs(const char *src_path, const char *target_dir, arp_packing_options_t *opts) {
+    //TODO
+    return 0;
+}
