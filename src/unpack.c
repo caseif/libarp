@@ -92,6 +92,55 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
     return 0;
 }
 
+static int _validate_path_component(const char *cmpnt, size_t len_s) {
+    for (uint8_t i = 0; i < len_s; i++) {
+        unsigned char c = cmpnt[i];
+        if (c & 0x80) {
+            // we can take a shortcut since we only care about specific code points, most of which are in ASCII
+            if ((c & 0xE0) == 0xC0) {
+                if (i == len_s - 1) {
+                    break;
+                }
+
+                uint16_t cp = ((c & 0x1F) << 6) | (cmpnt[i + 1] & 0x3F);
+
+                if (cp >= 0x80 && cp <= 0x9F) {
+                    libarp_set_error("Path component must not contain control characters");
+                    return -1;
+                }
+
+                // 2-byte character, skip one extra byte
+                i += 1;
+            } else if ((c & 0xF0) == 0xE0) {
+                // 3-byte character, skip two extra bytes
+                i += 2;
+            } else if ((c & 0xF8) == 0xF0) {
+                // 4-byte character, skip three extra bytes
+                i += 3;
+            } else {
+                // note that this most definitely does not catch all cases of illegal UTF-8
+                libarp_set_error("Path component is not legal UTF-8");
+                return -1;
+            }
+            
+            continue;
+        }
+
+        // we're guaranteed to be working with an ASCII character at this point
+        if (c <= 0x1F || c == 0x7F) {
+            libarp_set_error("Path component must not contain control characters");
+            return -1;
+        }
+
+        if (c == '/' || c == '\\' || c == ':') {
+            libarp_set_error("Path component must not contain reserved characters");
+            return -1;
+        }
+    }
+    
+    return 0;
+}
+
 static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
@@ -325,55 +374,6 @@ static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
     return memcmp(a->name, b->name, MIN(a->name_len_s, b->name_len_s));
 }
 
-static int _validate_path_component(const char *cmpnt, size_t len_s) {
-    for (uint8_t i = 0; i < len_s; i++) {
-        unsigned char c = cmpnt[i];
-        if (c & 0x80) {
-            // we can take a shortcut since we only care about specific code points, most of which are in ASCII
-            if ((c & 0xE0) == 0xC0) {
-                if (i == len_s - 1) {
-                    break;
-                }
-
-                uint16_t cp = ((c & 0x1F) << 6) | (cmpnt[i + 1] & 0x3F);
-
-                if (cp >= 0x80 && cp <= 0x9F) {
-                    libarp_set_error("Path component must not contain control characters");
-                    return -1;
-                }
-
-                // 2-byte character, skip one extra byte
-                i += 1;
-            } else if ((c & 0xF0) == 0xE0) {
-                // 3-byte character, skip two extra bytes
-                i += 2;
-            } else if ((c & 0xF8) == 0xF0) {
-                // 4-byte character, skip three extra bytes
-                i += 3;
-            } else {
-                // note that this most definitely does not catch all cases of illegal UTF-8
-                libarp_set_error("Path component is not legal UTF-8");
-                return -1;
-            }
-            
-            continue;
-        }
-
-        // we're guaranteed to be working with an ASCII character at this point
-        if (c <= 0x1F || c == 0x7F) {
-            libarp_set_error("Path component must not contain control characters");
-            return -1;
-        }
-
-        if (c == '/' || c == '\\' || c == ':') {
-            libarp_set_error("Path component must not contain reserved characters");
-            return -1;
-        }
-    }
-    
-    return 0;
-}
-
 static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
         libarp_set_error("calloc failed");
@@ -398,7 +398,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         } else if (node_desc_len > NODE_DESC_MAX_LEN) {
             libarp_set_error("Node descriptor is too large");
             return -1;
-        } else if (pack->cat_len - cur_off < node_desc_len - 2) {
+        } else if (pack->cat_len - cur_off < node_desc_len - (uint64_t) 2) {
             libarp_set_error("Catalogue underflow");
             return -1;
         }
@@ -412,12 +412,12 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
         node_desc_t *node = pack->all_nodes[i];
 
-        copy_to_field(node->type, catalogue, 1, &cur_off);
-        copy_to_field(node->part_index, catalogue, 2, &cur_off);
-        copy_to_field(node->data_off, catalogue, 8, &cur_off);
-        copy_to_field(node->data_len, catalogue, 8, &cur_off);
-        copy_to_field(node->crc, catalogue, 4, &cur_off);
-        copy_to_field(node->name_len_s, catalogue, 1, &cur_off);
+        copy_to_field(&node->type, catalogue, 1, &cur_off);
+        copy_to_field(&node->part_index, catalogue, 2, &cur_off);
+        copy_to_field(&node->data_off, catalogue, 8, &cur_off);
+        copy_to_field(&node->data_len, catalogue, 8, &cur_off);
+        copy_to_field(&node->crc, catalogue, 4, &cur_off);
+        copy_to_field(&node->name_len_s, catalogue, 1, &cur_off);
 
         if (i == 0 && node->name_len_s > 0) {
             libarp_set_error("Root node name must be empty string");
@@ -443,7 +443,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             node->name = NULL;
         }
 
-        copy_to_field(node->mime_len_s, catalogue, 1, &cur_off);
+        copy_to_field(&node->mime_len_s, catalogue, 1, &cur_off);
 
         if (node->mime_len_s > 0) {
             if (node->type == NODE_TYPE_DIRECTORY) {
@@ -669,7 +669,7 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
     return 0;
 }
 
-void _unload_node(node_desc_t *node) {
+static void _unload_node(node_desc_t *node) {
     if (node != NULL) {
         if (node->loaded_data != NULL) {
             if (node->loaded_data->data != NULL) {
@@ -722,8 +722,14 @@ int unload_package(ArgusPackage package) {
     return 0;
 }
 
-bool cmp_node_name(void *name, void *node) {
-    node_desc_t *real_node = ((node_desc_t*) node);
+static int _cmp_node_names(const void *a, const void *b) {
+    node_desc_t *real_a = (node_desc_t*) a;
+    node_desc_t *real_b = (node_desc_t*) b;
+    return strncmp(real_a->name, real_b->name, MIN(real_a->name_len_s, real_b->name_len_s));
+}
+
+static int _cmp_node_name_to_needle(const void *name, const void *node) {
+    node_desc_t *real_node = (node_desc_t*) node;
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
@@ -732,17 +738,20 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     size_t path_len_s = strlen(path);
 
-    const char *path_copy = malloc(path_len_s + 1);
+    char *path_copy = malloc(path_len_s + 1);
     memcpy(path_copy, path, path_len_s + 1);
     char *path_tail = path_copy;
     size_t cursor = 0;
+    char *needle;
 
-    if ((cursor = strchr(path_tail, NAMESPACE_DELIM)) == NULL) {
+    if ((needle = strchr(path_tail, NAMESPACE_DELIM)) == NULL) {
         free(path_copy);
 
         libarp_set_error("Path must contain a namespace");
         return NULL;
     }
+
+    cursor = needle - path_tail;
 
     size_t namespace_len_s = cursor;
     path_tail[cursor] = '\0';
@@ -760,10 +769,12 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     // start at root
     node_desc_t *cur_node = real_pack->all_nodes[0];
 
-    while ((cursor = strchr(path_tail, PATH_DELIM)) != NULL) {
+    while ((needle = strchr(path_tail, PATH_DELIM)) != NULL) {
+        cursor = needle - path_tail;
+
         path_tail[cursor] = '\0';
 
-        bt_node_t *found = bt_find(cur_node->children_tree, path_tail, cmp_node_name);
+        bt_node_t *found = bt_find(cur_node->children_tree, path_tail, _cmp_node_names);
         if (found == NULL) {
             free(path_copy);
 
@@ -778,7 +789,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     }
 
     // should be at terminal component now
-    bt_node_t *found = bt_find(cur_node->children_tree, path_tail, cmp_node_name);
+    bt_node_t *found = bt_find(cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
     if (found == NULL) {
         free(path_copy);
 
@@ -833,7 +844,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         return NULL;
     }
 
-    if (part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
+    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
         fclose(part_file);
         unload_resource(res);
 
