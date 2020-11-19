@@ -92,8 +92,8 @@ The first node descriptor must describe the root directory of the package. This 
 
 A node descriptor describes and points to either a resource or a directory listing within a body section.
 
-Nodes descriptors will contain the CRC-32 of the corresponding data. This may optionally be ignored by the unpacker if
-the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
+Nodes descriptors will contain the CRC-32C checksum of the corresponding data. This may optionally be ignored by the
+unpacker if the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
 The maximum length by design for each a node name and node mime type is 255 bytes.
 
@@ -109,7 +109,7 @@ Node mime types may not contain any control characters.
 | `0x3` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x5` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
 | `0xD` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
-| `0x15` | `0x4` | CRC | The CRC-32 of the node data. |
+| `0x15` | `0x4` | CRC | The CRC-32C checksum of the node data. |
 | `0x19` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
 | `0x1A` | variable | Name | The name of this node as a string, not including a null terminator. |
 | variable | `0x1` | Mime type Length | The length of the node name in bytes, not including a null terminator. |

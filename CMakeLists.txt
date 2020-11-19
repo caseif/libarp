@@ -88,7 +88,7 @@ if(MSVC)
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
   set(CMAKE_C_FLAGS "-Wall -Wextra -Winit-self -Wuninitialized \
-                     -Wmissing-declarations -Winit-self -pedantic -pedantic-errors -std=c11")
+                     -Wmissing-declarations -Winit-self -pedantic -pedantic-errors -std=c11 -msse4.2")
   set(CMAKE_C_FLAGS_DEBUG "-g")
   set(CMAKE_C_FLAGS_RELEASE "-O3")
 endif()

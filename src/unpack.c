@@ -810,6 +810,64 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         return (arp_resource_t*) cur_node->loaded_data;
     }
 
+    if (cur_node->part_index > real_pack->total_parts) {
+        libarp_set_error("Node part index is invalid");
+        return NULL;
+    }
+
+    FILE *part_file = fopen(real_pack->part_paths[cur_node->part_index - 1], "r");
+    if (part_file == NULL) {
+        libarp_set_error("Failed to open part file");
+        return NULL;
+    }
+
+    stat_t part_stat;
+    if (fstat(fileno(part_file), &part_stat) != 0) {
+        fclose(part_file);
+
+        libarp_set_error("Failed to stat part file");
+        return NULL;
+    }
+
+    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
+        fclose(part_file);
+
+        libarp_set_error("Part file is too small to fit node data");
+        return NULL;
+    }
+
+    void *raw_data;
+    if ((raw_data = malloc(cur_node->data_len)) == NULL) {
+        fclose(part_file);
+
+        libarp_set_error("malloc failed");
+        return NULL;
+    }
+
+    fseek(part_file, PACKAGE_PART_HEADER_LEN + cur_node->data_off, SEEK_SET);
+
+    if ((fread(raw_data, cur_node->data_len, 1, part_file)) != 1) {
+        fclose(part_file);
+
+        libarp_set_error("Failed to read from part file");
+        return NULL;
+    }
+
+    fclose(part_file);
+
+    void *final_data;
+
+    if (real_pack->compression_type[0] != '\0') {
+        if (strcmp(real_pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
+            //TODO: zlib stuff
+        } else {
+            libarp_set_error("Unrecognized compression magic");
+            return NULL;
+        }
+    } else {
+        final_data = raw_data;
+    }
+
     arp_resource_t *res;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -819,58 +877,6 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     res->len = cur_node->data_len;
     res->extra = cur_node;
     cur_node->loaded_data = res;
-
-    if (cur_node->part_index > real_pack->total_parts) {
-        unload_resource(res);
-
-        libarp_set_error("Node part index is invalid");
-        return NULL;
-    }
-
-    FILE *part_file = fopen(real_pack->part_paths[cur_node->part_index - 1], "r");
-    if (part_file == NULL) {
-        unload_resource(res);
-
-        libarp_set_error("Failed to open part file");
-        return NULL;
-    }
-
-    stat_t part_stat;
-    if (fstat(fileno(part_file), &part_stat) != 0) {
-        fclose(part_file);
-        unload_resource(res);
-
-        libarp_set_error("Failed to stat part file");
-        return NULL;
-    }
-
-    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
-        fclose(part_file);
-        unload_resource(res);
-
-        libarp_set_error("Part file is too small to fit node data");
-        return NULL;
-    }
-
-    if ((res->data = malloc(cur_node->data_len)) == NULL) {
-        fclose(part_file);
-        unload_resource(res);
-
-        libarp_set_error("malloc failed");
-        return NULL;
-    }
-
-    fseek(part_file, PACKAGE_PART_HEADER_LEN + cur_node->data_off, SEEK_SET);
-
-    if ((fread(res->data, cur_node->data_len, 1, part_file)) != 1) {
-        fclose(part_file);
-        unload_resource(res);
-
-        libarp_set_error("Failed to read from part file");
-        return NULL;
-    }
-
-    fclose(part_file);
 
     return res;
 }
