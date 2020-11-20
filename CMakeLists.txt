@@ -14,10 +14,21 @@ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(SEND_ERROR "In-source builds are not allowed.")
 endif()
 
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+  message(SEND_ERROR "32-bit builds are not supported")
+endif()
+
 set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE 1)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
+endif()
+
+SET(IS_TARGET_x86 0)
+if(MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "AMD64")
+  set(IS_TARGET_X86 1)
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  set(IS_TARGET_X86 1)
 endif()
 
 # include dir for generated headers which must be copied (configs)
@@ -88,7 +99,10 @@ if(MSVC)
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
   set(CMAKE_C_FLAGS "-Wall -Wextra -Winit-self -Wuninitialized \
-                     -Wmissing-declarations -Winit-self -pedantic -pedantic-errors -std=c11 -msse4.2")
+                     -Wmissing-declarations -Winit-self -pedantic -pedantic-errors -std=c11")
+  if(IS_TARGET_X86)
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
+  endif()
   set(CMAKE_C_FLAGS_DEBUG "-g")
   set(CMAKE_C_FLAGS_RELEASE "-O3")
 endif()
