@@ -44,8 +44,12 @@ set(ZLIB_LIBRARY "zlib")
 set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_INCLUDE_DIR "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
 add_subdirectory("${ZLIB_SOURCE_DIR}")
-set_target_properties(zlibstatic minigzip minigzip64 example example64
+set_target_properties(zlibstatic minigzip example
                         PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+if(TARGET minigzip64)
+  set_target_properties(minigzip64 example64
+                          PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+endif()
 add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
 
