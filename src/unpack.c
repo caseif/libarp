@@ -22,6 +22,9 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#define _CRT_NONSTDC_NO_DEPRECATE
+#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_DEPRECATE  
 #include <windows.h>
 #include <memoryapi.h>
 #else
@@ -193,7 +196,7 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
 
 static int _validate_part_files(argus_package_t *pack, const char *primary_path) {
     #ifdef _WIN32
-    char *real_path = _fullpath(NULL, primary_path, size_t(-1));
+    char *real_path = _fullpath(NULL, primary_path, (size_t) -1);
     #else
     char *real_path = realpath(primary_path, NULL);
     #endif
