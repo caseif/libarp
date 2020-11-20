@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #ifdef _WIN32
     #include <Windows.h>
 
@@ -20,8 +23,6 @@
     #include <dirent.h>
     #include <features.h>
     #include <unistd.h>
-    #include <sys/stat.h>
-    #include <sys/types.h>
 
     #ifndef __USE_FILE_OFFSET64
         #define __USE_FILE_OFFSET64
@@ -45,7 +46,6 @@
 #elif defined __FreeBSD__
     #include <dirent.h>
     #include <sys/sysctl.h>
-    #include <sys/types.h>
 
     #define stat_t struct stat
 #else

@@ -34,7 +34,9 @@ static void _compute_crc_lookup_table(void) {
 #ifdef __amd64__
 static inline bool _is_sse42_supported(void) {
     #ifdef _WIN32
-    return false;
+    int cpu_info[4];
+    __cpuid(cpu_info, 1);
+    return cpu_info[1] & (1 << 20);
     #else
     __builtin_cpu_init();
     return __builtin_cpu_supports("sse4.2");
