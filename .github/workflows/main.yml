@@ -1,0 +1,39 @@
+name: libarp
+on: [push, pull_request]
+
+jobs:
+  build-ubuntu:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: submodule checkout
+      run: git submodule update --init --recursive
+    - name: configure
+      run: mkdir build && cd build && cmake ..
+    - name: build
+      run: cmake --build build --config Debug --parallel 8
+    - name: archive
+      uses: actions/upload-artifact@v1
+      with:
+        name: libarp_dist_linux
+        path: build/dist/
+
+  build-windows:
+
+    runs-on: windows-2019
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: submodule checkout
+      run: git submodule update --init --recursive
+    - name: configure
+      run: mkdir build && cd build && cmake -DCMAKE_GENERATOR_PLATFORM=x64 ..
+    - name: build
+      run: cmake --build build --config Debug --parallel 8
+    - name: archive
+      uses: actions/upload-artifact@v1
+      with:
+        name: libarp_dist_windows
+        path: build/dist/

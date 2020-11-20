@@ -3,7 +3,9 @@ if(POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
 endif()
 
-project(arp VERSION 1.0.0)
+project(libarp VERSION 1.0.0)
+
+set(LIBRARY_BASE_NAME arp)
 
 option(LIBARP_FEATURE_PACK "Compile with support for packing data" ON)
 option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
@@ -62,14 +64,14 @@ set(LIBRARY_OUTPUT_PATH "${LIB_OUT_DIR}")
 
 # configure the copy headers task
 set(HDR_TARGET "${PROJECT_NAME}_headers")
-set(HDR_OUT_DIR "${DIST_DIR}/include/")
+set(HDR_OUT_DIR "${DIST_DIR}/include")
 add_custom_target(${HDR_TARGET})
 add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E
     make_directory ${HDR_OUT_DIR})
 add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E
-    copy_directory "${CMAKE_SOURCE_DIR}/${INC_DIR}" "${HDR_OUT_DIR}")
+    copy_directory "${CMAKE_SOURCE_DIR}/${INC_DIR}/${CMAKE_PROJECT_NAME}/" "${HDR_OUT_DIR}/${CMAKE_PROJECT_NAME}/")
 
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
 
@@ -87,6 +89,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES C_STANDARD 11)
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # export all symbols (required on Windows)
 set_target_properties(${PROJECT_NAME} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+# set target name
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${LIBRARY_BASE_NAME})
 
 if(MSVC)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
