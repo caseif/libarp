@@ -14,9 +14,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#ifdef _WIN32
-#include <intrin.h>
-#endif
+#include <immintrin.h>
 
 #define CRC_POLY_REV 0x82F63B78
 
@@ -45,8 +43,7 @@ static inline bool _is_sse42_supported(void) {
 #endif
 
 static inline uint32_t _x86_crc32c(const void *data, size_t len) {
-    #ifdef _WIN32
-    size_t data_block_len = 4;
+    size_t data_block_len = 8;
 
     uint32_t crc = ~0;
     for (size_t i = 0; i < len - (len % data_block_len); i += data_block_len) {
@@ -55,18 +52,7 @@ static inline uint32_t _x86_crc32c(const void *data, size_t len) {
     for (size_t i = len - (len % data_block_len); i < len; i++) {
         crc = _mm_crc32_u8(crc, *((uint8_t*) ((uintptr_t) data + i)));
     }
-    #else
-    size_t data_block_len = 8;
-
-    uint32_t crc = ~0;
-    for (size_t i = 0; i < len - (len % data_block_len); i += data_block_len) {
-        crc = __builtin_ia32_crc32di(crc, *((uint64_t*) ((uintptr_t) data + i)));
-    }
-    for (size_t i = len - (len % data_block_len); i < len; i++) {
-        crc = __builtin_ia32_crc32qi(crc, *((uint8_t*) ((uintptr_t) data + i)));
-    }
     return ~crc;
-    #endif
 }
 
 static inline uint32_t _sw_crc32c(const void *data, size_t len) {

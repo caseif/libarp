@@ -25,8 +25,9 @@
 #define _CRT_NONSTDC_NO_DEPRECATE
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE  
-#include <windows.h>
+#include <intrin.h>
 #include <memoryapi.h>
+#include <windows.h>
 #else
 #include <immintrin.h>
 #include <sys/mman.h>
