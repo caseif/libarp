@@ -28,7 +28,7 @@ static uint32_t crc_lookup[256];
 static void _compute_crc_lookup_table(void) {
     for (uint16_t i = 0; i < 256; i++) {
         uint32_t crc = i;
-        for (uint8_t i = 0; i < 8; i++) {
+        for (uint8_t j = 0; j < 8; j++) {
             crc = crc & 1 ? (crc >> 1) ^ CRC_POLY_REV : crc >> 1;
         }
         crc_lookup[i] = crc;
