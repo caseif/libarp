@@ -18,6 +18,10 @@
 
 #define CRC_POLY_REV 0x82F63B78
 
+#if defined(__x86_64__) || defined(_M_X64)
+#define ARCH_X64
+#endif
+
 static bool lookup_table_initted = false;
 static uint32_t crc_lookup[256];
 
@@ -31,7 +35,7 @@ static void _compute_crc_lookup_table(void) {
     }
 }
 
-#ifdef __amd64__
+#ifdef ARCH_X64
 static inline bool _is_sse42_supported(void) {
     #ifdef _WIN32
     int cpu_info[4];
@@ -75,7 +79,7 @@ static inline uint32_t _sw_crc32c(const void *data, size_t len) {
 }
 
 uint32_t crc32c(const void *data, size_t len) {
-    #if defined(__x86_64__) || defined(_M_X64)
+    #ifdef ARCH_X64
     if (_is_sse42_supported()) {
         return _x86_crc32c(data, len);
     }

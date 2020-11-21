@@ -15,6 +15,7 @@
 
 #include <errno.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -209,7 +210,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     const char *file_base;
 
     #ifdef _WIN32
-    if ((file_base = MAX(strrchr(real_path, '\\'), strrche(real_path, '/'))) != NULL) {
+    if ((file_base = MAX(strrchr(real_path, '\\'), strrchr(real_path, '/'))) != NULL) {
         file_base += 1;
     } else {
         file_base = real_path;
