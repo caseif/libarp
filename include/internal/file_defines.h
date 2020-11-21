@@ -24,19 +24,6 @@
     #include <features.h>
     #include <unistd.h>
 
-    #ifndef __USE_FILE_OFFSET64
-        #define __USE_FILE_OFFSET64
-    #endif
-    #ifndef __USE_LARGEFILE64
-        #define __USE_LARGEFILE64
-    #endif
-    #ifndef _LARGEFILE64_SOURCE
-        #define _LARGEFILE64_SOURCE
-    #endif
-    #ifndef _FILE_OFFSET_BIT
-        #define _FILE_OFFSET_BIT 64
-    #endif
-
     #define stat_t struct stat
 #elif defined __NetBSD__ || defined __DragonFly__
     #include <dirent.h>

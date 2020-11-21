@@ -905,7 +905,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
             size_t remaining = cur_node->data_len;
             size_t bytes_decompressed = 0;
-            size_t data_window = raw_data;
+            void *data_window = raw_data;
 
             unsigned char dfl_out_buf[CHUNK_LEN];
 
@@ -916,7 +916,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
                 defl_stream.next_in = data_window;
 
                 remaining -= to_read;
-                data_window += to_read;
+                data_window = (void*) ((uintptr_t) data_window + to_read);
 
                 while (defl_stream.avail_out == 0) {
                     defl_stream.avail_out = CHUNK_LEN;
@@ -949,7 +949,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
                         return NULL;
                     }
 
-                    memcpy(inflated_data + bytes_decompressed, dfl_out_buf, got_len);
+                    memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
                     bytes_decompressed += got_len;
                 }
             }
