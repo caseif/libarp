@@ -81,6 +81,13 @@ typedef struct ArgusPack {
     char **part_paths;
 } argus_package_t;
 
+typedef struct ArpPackingOptions {
+    char *pack_name;
+    char *pack_namespace;
+    size_t max_part_len;
+    char *compression_type;
+} arp_packing_options_t;
+
 node_desc_t *create_dir_entry_dir(uint8_t name_length, char *name, uint64_t data_offset);
 
 node_desc_t *create_dir_entry_res(uint8_t name_length, char *name, uint16_t part_index, uint64_t data_offset,

@@ -15,13 +15,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-arp_packing_options_t *create_v1_packing_options(char *pack_name, char *pack_namespace, size_t max_part_len,
+ArpPackingOptions create_v1_packing_options(char *pack_name, char *pack_namespace, size_t max_part_len,
         char *compression_type) {
+
     size_t name_len = strlen(pack_name);
     size_t namespace_len = strlen(pack_namespace);
     size_t compression_type_len = strlen(compression_type);
 
-    if (namespace_len > PACKAGE_NAMESPACE_LEN) {
+    if (name_len == 0) {
+        libarp_set_error("Package name must not be empty");
+        return NULL;
+    }
+
+    if (namespace_len == 0) {
+        libarp_set_error("Namespace must not be empty");
+        return NULL;
+    } else if (namespace_len > PACKAGE_NAMESPACE_LEN) {
         libarp_set_error("Namespace length is too long");
         return NULL;
     }
@@ -45,27 +54,31 @@ arp_packing_options_t *create_v1_packing_options(char *pack_name, char *pack_nam
     return opts;
 }
 
-void release_packing_options(arp_packing_options_t *opts) {
+void release_packing_options(ArpPackingOptions opts) {
     if (opts == NULL) {
         return;
     }
 
-    if (opts->pack_name != NULL) {
-        free(opts->pack_name);
+    arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
+
+    if (real_opts->pack_name != NULL) {
+        free(real_opts->pack_name);
     }
 
-    if (opts->pack_namespace != NULL) {
-        free(opts->pack_namespace);
+    if (real_opts->pack_namespace != NULL) {
+        free(real_opts->pack_namespace);
     }
 
-    if (opts->compression_type != NULL) {
-        free(opts->compression_type);
+    if (real_opts->compression_type != NULL) {
+        free(real_opts->compression_type);
     }
 
-    free(opts);
+    free(real_opts);
 }
 
-int create_arp_from_fs(const char *src_path, const char *target_dir, arp_packing_options_t *opts) {
+int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts) {
+    arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
+
     //TODO
     return 0;
 }
