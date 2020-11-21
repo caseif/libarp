@@ -104,15 +104,16 @@ Node mime types may not contain any control characters.
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
-| `0x0` | `0x2` | Descriptor Length | The length of the node descriptor, including this length field. |
+| `0x0` | `0x2` | Descriptor length | The length of the node descriptor, including this length field. |
 | `0x2` | `0x1` | Type | The type of the node. `0` for resource, `1` for directory. |
 | `0x3` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x5` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
-| `0xD` | `0x8` | Data Length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
-| `0x15` | `0x4` | CRC | The CRC-32C checksum of the node data. |
-| `0x19` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
-| `0x1A` | variable | Name | The name of this node as a string, not including a null terminator. |
-| variable | `0x1` | Mime type Length | The length of the node name in bytes, not including a null terminator. |
+| `0xD` | `0x8` | Data length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
+| `0x15` | `0x8` | Raw data length | The length of the uncompressed node data in bytes. If the package does not use compression or this node is a directory, this field will be ignored. |
+| `0x1D` | `0x4` | CRC | The CRC-32C checksum of the node data. |
+| `0x21` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
+| `0x22` | variable | Name | The name of this node as a string, not including a null terminator. |
+| variable | `0x1` | Mime type length | The length of the node name in bytes, not including a null terminator. |
 | variable | variable | Mime type | The mime type of this node as a string, not including a null terminator. |
 
 #### Body
@@ -153,7 +154,7 @@ magic.**
 
 ### Compression Type
 
-Files in the archive may be compressed with a number of different schemes. The available formats as well as their
+Resources in the archive may be compressed with a number of different schemes. The available formats as well as their
 magic values are described in the table below.
 
 As of version 1.0, the ARP specification requires that compliant implementations provide support only for the DEFLATE
@@ -162,6 +163,9 @@ speed.
 
 Generators need not limit themselves to these values if they wish to use other compression schemes, but
 decompression support is not guaranteed by the specification.
+
+Only resources may be compressed. Directory listings are always stored uncompressed, irrespective of the package's
+compression field.
 
 Compression magic must not contain ASCII control characters.
 
