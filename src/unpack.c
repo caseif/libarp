@@ -9,6 +9,7 @@
 
 #include "libarp/unpack.h"
 #include "internal/bt.h"
+#include "internal/crc32c.h"
 #include "internal/file_defines.h"
 #include "internal/package.h"
 #include "internal/util.h"
@@ -859,6 +860,12 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     }
 
     fclose(part_file);
+
+    uint32_t real_crc = crc32c(raw_data, cur_node->data_len);
+    if (real_crc != cur_node->crc) {
+        libarp_set_error("CRC mismatch");
+        return NULL;
+    }
 
     void *final_data;
 
