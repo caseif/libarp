@@ -35,8 +35,8 @@
 
 #define PACKAGE_PART_1_SUFFIX ".part001"
 
-#define NODE_DESC_BASE_LEN 0x19
-#define NODE_DESC_MIN_LEN 0x1B
+#define NODE_DESC_BASE_LEN 0x21
+#define NODE_DESC_MIN_LEN 0x23
 #define NODE_NAME_MAX_LEN 0xFF
 #define NODE_MIME_MAX_LEN 0xFF
 #define NODE_DESC_MAX_LEN (NODE_DESC_MIN_LEN + NODE_NAME_MAX_LEN + NODE_MIME_MAX_LEN)
@@ -56,6 +56,7 @@ typedef struct NodeDesc {
     uint16_t part_index;
     uint64_t data_off;
     uint64_t data_len;
+    uint64_t data_uc_len;
     uint32_t crc;
     uint8_t name_len_s;
     char *name;

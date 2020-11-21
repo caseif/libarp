@@ -14,6 +14,8 @@
 #include "internal/package.h"
 #include "internal/util.h"
 
+#include "zlib.h"
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -37,6 +39,8 @@
 
 #define MIN(a, b) (a < b ? a : b)
 #define MAX(a, b) (a > b ? a : b)
+
+#define CHUNK_LEN 262144 // 256K
 
 static void copy_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
     memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
@@ -422,6 +426,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         copy_to_field(&node->part_index, catalogue, 2, &cur_off);
         copy_to_field(&node->data_off, catalogue, 8, &cur_off);
         copy_to_field(&node->data_len, catalogue, 8, &cur_off);
+        copy_to_field(&node->data_uc_len, catalogue, 8, &cur_off);
         copy_to_field(&node->crc, catalogue, 4, &cur_off);
         copy_to_field(&node->name_len_s, catalogue, 1, &cur_off);
 
@@ -853,6 +858,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     fseek(part_file, PACKAGE_PART_HEADER_LEN + cur_node->data_off, SEEK_SET);
 
     if ((fread(raw_data, cur_node->data_len, 1, part_file)) != 1) {
+        free(raw_data);
         fclose(part_file);
 
         libarp_set_error("Failed to read from part file");
@@ -863,6 +869,8 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     uint32_t real_crc = crc32c(raw_data, cur_node->data_len);
     if (real_crc != cur_node->crc) {
+        free(raw_data);
+
         libarp_set_error("CRC mismatch");
         return NULL;
     }
@@ -871,8 +879,94 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     if (real_pack->compression_type[0] != '\0') {
         if (strcmp(real_pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
-            //TODO: zlib stuff
+            int rc;
+
+            z_stream defl_stream;
+            defl_stream.zalloc = Z_NULL;
+            defl_stream.zfree = Z_NULL;
+            defl_stream.opaque = Z_NULL;
+            defl_stream.avail_in = 0;
+            defl_stream.next_in = Z_NULL;
+            
+            if ((rc = inflateInit(&defl_stream)) != Z_OK) {
+                free(raw_data);
+
+                libarp_set_error("zlib inflateInit failed");
+                return NULL;
+            }
+
+            void *inflated_data;
+            if ((inflated_data = malloc(cur_node->data_uc_len))) {
+                free(raw_data);
+
+                libarp_set_error("malloc failed");
+                return NULL;
+            }
+
+            size_t remaining = cur_node->data_len;
+            size_t bytes_decompressed = 0;
+            size_t data_window = raw_data;
+
+            unsigned char dfl_out_buf[CHUNK_LEN];
+
+            while (remaining > 0) {
+                size_t to_read = MIN(remaining, CHUNK_LEN);
+
+                defl_stream.avail_in = to_read;
+                defl_stream.next_in = data_window;
+
+                remaining -= to_read;
+                data_window += to_read;
+
+                while (defl_stream.avail_out == 0) {
+                    defl_stream.avail_out = CHUNK_LEN;
+                    defl_stream.next_out = dfl_out_buf;
+
+                    rc = inflate(&defl_stream, Z_NO_FLUSH);
+                    switch (rc) {
+                        case Z_STREAM_ERROR:
+                        case Z_NEED_DICT:
+                        case Z_DATA_ERROR:
+                        case Z_MEM_ERROR:
+                            inflateEnd(&defl_stream);
+                            free(inflated_data);
+                            free(raw_data);
+
+                            libarp_set_error("zlib inflate failed");
+                            return NULL;
+                        case Z_STREAM_END:
+                            goto end_inflate_loop; // ew
+                    }
+
+                    size_t got_len = CHUNK_LEN - defl_stream.avail_out;
+
+                    if (bytes_decompressed + got_len > cur_node->data_uc_len) {
+                        inflateEnd(&defl_stream);
+                        free(inflated_data);
+                        free(raw_data);
+
+                        libarp_set_error("Decompressed data exceeds expected length");
+                        return NULL;
+                    }
+
+                    memcpy(inflated_data + bytes_decompressed, dfl_out_buf, got_len);
+                    bytes_decompressed += got_len;
+                }
+            }
+            
+            end_inflate_loop:
+            inflateEnd(&defl_stream);
+            free(raw_data);
+
+            if (rc != Z_STREAM_END) {
+                libarp_set_error("DEFLATE stream is incomplete");
+                return NULL;
+            }
+
+            final_data = inflated_data;
         } else {
+            free(raw_data);
+
             libarp_set_error("Unrecognized compression magic");
             return NULL;
         }
@@ -882,10 +976,13 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     arp_resource_t *res;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
+        free(raw_data);
+
         libarp_set_error("malloc failed");
         return NULL;
     }
 
+    res->data = final_data;
     res->len = cur_node->data_len;
     res->extra = cur_node;
     cur_node->loaded_data = res;
