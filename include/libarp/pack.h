@@ -4,8 +4,14 @@
 
 typedef void* ArpPackingOptions;
 
-ArpPackingOptions create_v1_packing_options(char *pack_name, char *pack_namespace, size_t max_part_len,
-        char *compression_type);
+typedef enum LinkBehavior {
+    LB_LINK,
+    LB_COPY,
+    LB_IGNORE,
+} link_behavior_t;
+
+ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, size_t max_part_len,
+        const char *compression_type, link_behavior_t link_behavior);
 
 void release_packing_options(ArpPackingOptions opts);
 

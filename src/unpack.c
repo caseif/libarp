@@ -9,9 +9,11 @@
 
 #include "libarp/unpack.h"
 #include "internal/bt.h"
+#include "internal/common_util.h"
 #include "internal/crc32c.h"
 #include "internal/file_defines.h"
-#include "internal/package.h"
+#include "internal/package_defines.h"
+#include "internal/unpack_util.h"
 #include "internal/util.h"
 
 #include "zlib.h"
@@ -42,34 +44,13 @@
 
 #define CHUNK_LEN 262144 // 256K
 
-static void copy_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
-    memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
-
-    int x = 0;
-    if (((unsigned char*) &x)[0] == 0) {
-        // system is big-Endian, so we need to convert to little
-        #ifdef _WIN32
-        if (dst_len == 2) {
-            *((uint16_t*)dst) = _byteswap_ushort(*((uint16_t*) dst));
-        } else if (dst_len == 3 || dst_len == 4) {
-            *((uint32_t*)dst) = _byteswap_ulong(*((uint32_t*)dst));
-        } else if (dst_len == 8) {
-            *((uint64_t*)dst) = _byteswap_uint64(*((uint64_t*)dst));
-        }
-        #else
-        if (dst_len == 2) {
-            *((uint16_t*)dst) = __builtin_bswap16(*((uint16_t*) dst));
-        } else if (dst_len == 3 || dst_len == 4) {
-            *((uint32_t*)dst) = __builtin_bswap32(*((uint32_t*)dst));
-        } else if (dst_len == 8) {
-            *((uint64_t*)dst) = __builtin_bswap64(*((uint64_t*)dst));
-        }
-        #endif
-    }
+static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
+    copy_int_as_le(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
 
     *src_off += dst_len;
 }
-static void copy_to_field_str(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
+
+static void _copy_str_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
     memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
     *src_off += dst_len;
 }
@@ -83,71 +64,22 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
     }
     header_off += PACKAGE_MAGIC_LEN;
 
-    copy_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, &header_off);
+    _copy_int_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, &header_off);
 
     if (pack->major_version != 1) {
         libarp_set_error("Package version is not supported");
         return -1;
     }
 
-    copy_to_field_str(&pack->compression_type, header_data, PACKAGE_COMPRESSION_LEN, &header_off);
-    copy_to_field_str(&pack->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, &header_off);
-    copy_to_field(&pack->total_parts, header_data, PACKAGE_PARTS_LEN, &header_off);
-    copy_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, &header_off);
-    copy_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, &header_off);
-    copy_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, &header_off);
-    copy_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, &header_off);
-    copy_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, &header_off);
+    _copy_str_to_field(&pack->compression_type, header_data, PACKAGE_COMPRESSION_LEN, &header_off);
+    _copy_str_to_field(&pack->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, &header_off);
+    _copy_int_to_field(&pack->total_parts, header_data, PACKAGE_PARTS_LEN, &header_off);
+    _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, &header_off);
+    _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, &header_off);
+    _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, &header_off);
+    _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, &header_off);
+    _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, &header_off);
 
-    return 0;
-}
-
-static int _validate_path_component(const char *cmpnt, size_t len_s) {
-    for (uint8_t i = 0; i < len_s; i++) {
-        unsigned char c = cmpnt[i];
-        if (c & 0x80) {
-            // we can take a shortcut since we only care about specific code points, most of which are in ASCII
-            if ((c & 0xE0) == 0xC0) {
-                if (i == len_s - 1) {
-                    break;
-                }
-
-                uint16_t cp = ((c & 0x1F) << 6) | (cmpnt[i + 1] & 0x3F);
-
-                if (cp >= 0x80 && cp <= 0x9F) {
-                    libarp_set_error("Path component must not contain control characters");
-                    return -1;
-                }
-
-                // 2-byte character, skip one extra byte
-                i += 1;
-            } else if ((c & 0xF0) == 0xE0) {
-                // 3-byte character, skip two extra bytes
-                i += 2;
-            } else if ((c & 0xF8) == 0xF0) {
-                // 4-byte character, skip three extra bytes
-                i += 3;
-            } else {
-                // note that this most definitely does not catch all cases of illegal UTF-8
-                libarp_set_error("Path component is not legal UTF-8");
-                return -1;
-            }
-            
-            continue;
-        }
-
-        // we're guaranteed to be working with an ASCII character at this point
-        if (c <= 0x1F || c == 0x7F) {
-            libarp_set_error("Path component must not contain control characters");
-            return -1;
-        }
-
-        if (c == '/' || c == '\\' || c == ':') {
-            libarp_set_error("Path component must not contain reserved characters");
-            return -1;
-        }
-    }
-    
     return 0;
 }
 
@@ -158,7 +90,7 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
         return -1;
     }
 
-    if (_validate_path_component(pack->package_namespace,
+    if (validate_path_component(pack->package_namespace,
             MIN(strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN))) {
         return -1;
     }
@@ -400,7 +332,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         }
 
         uint16_t node_desc_len;
-        copy_to_field(&node_desc_len, catalogue, 2, &cur_off);
+        _copy_int_to_field(&node_desc_len, catalogue, 2, &cur_off);
 
         if (node_desc_len < NODE_DESC_MIN_LEN) {
             libarp_set_error("Node descriptor is too small");
@@ -422,13 +354,13 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
         node_desc_t *node = pack->all_nodes[i];
 
-        copy_to_field(&node->type, catalogue, 1, &cur_off);
-        copy_to_field(&node->part_index, catalogue, 2, &cur_off);
-        copy_to_field(&node->data_off, catalogue, 8, &cur_off);
-        copy_to_field(&node->data_len, catalogue, 8, &cur_off);
-        copy_to_field(&node->data_uc_len, catalogue, 8, &cur_off);
-        copy_to_field(&node->crc, catalogue, 4, &cur_off);
-        copy_to_field(&node->name_len_s, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->type, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->part_index, catalogue, 2, &cur_off);
+        _copy_int_to_field(&node->data_off, catalogue, 8, &cur_off);
+        _copy_int_to_field(&node->data_len, catalogue, 8, &cur_off);
+        _copy_int_to_field(&node->data_uc_len, catalogue, 8, &cur_off);
+        _copy_int_to_field(&node->crc, catalogue, 4, &cur_off);
+        _copy_int_to_field(&node->name_len_s, catalogue, 1, &cur_off);
 
         if (i == 0 && node->name_len_s > 0) {
             libarp_set_error("Root node name must be empty string");
@@ -442,7 +374,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             }
         
             char node_name_tmp[256];
-            copy_to_field_str(node_name_tmp, catalogue, node->name_len_s, &cur_off);
+            _copy_str_to_field(node_name_tmp, catalogue, node->name_len_s, &cur_off);
             node->name[node->name_len_s] = '\0';
 
             if ((node->name = malloc(node->name_len_s + 1)) == NULL) {
@@ -454,10 +386,10 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             node->name = NULL;
         }
 
-        copy_to_field(&node->mime_len_s, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->mime_len_s, catalogue, 1, &cur_off);
 
         if (node->mime_len_s > 0) {
-            if (node->type == NODE_TYPE_DIRECTORY) {
+            if (node->type == PACK_NODE_TYPE_DIRECTORY) {
                 libarp_set_error("Directory nodes may not have mime types");
                 return -1;
             }
@@ -469,7 +401,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
 
             char node_mime_tmp[256];
-            copy_to_field_str(node_mime_tmp, catalogue, node->mime_len_s, &cur_off);
+            _copy_str_to_field(node_mime_tmp, catalogue, node->mime_len_s, &cur_off);
             node_mime_tmp[node->mime_len_s] = '\0';
 
 
@@ -482,14 +414,14 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             node->mime_type = NULL;
         }
 
-        _validate_path_component(node->name, node->name_len_s);
+        validate_path_component(node->name, node->name_len_s);
 
-        if (node->type != NODE_TYPE_RESOURCE && node->type != NODE_TYPE_DIRECTORY) {
+        if (node->type != PACK_NODE_TYPE_RESOURCE && node->type != PACK_NODE_TYPE_DIRECTORY) {
             libarp_set_error("Invalid node type");
             return -1;
         }
 
-        if (node->type == NODE_TYPE_DIRECTORY) {
+        if (node->type == PACK_NODE_TYPE_DIRECTORY) {
             if (node->part_index != 1) {
                 libarp_set_error("Directory node content must be in primary part");
                 return -1;
@@ -512,7 +444,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
     for (uint64_t i = 0; i < pack->node_count; i++) {
         node_desc_t *node = pack->all_nodes[i];
         
-        if (node->type != NODE_TYPE_DIRECTORY) {
+        if (node->type != PACK_NODE_TYPE_DIRECTORY) {
             continue;
         }
 
@@ -812,7 +744,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     cur_node = (node_desc_t*) found->data;
 
-    if (cur_node->type == NODE_TYPE_DIRECTORY) {
+    if (cur_node->type == PACK_NODE_TYPE_DIRECTORY) {
         libarp_set_error("Requested path points to directory");
         return NULL;
     }

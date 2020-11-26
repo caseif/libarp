@@ -17,22 +17,29 @@
 #elif defined __APPLE__
     #include <dirent.h>
     #include <mach-o/dyld.h>
+    #include <sys/syslimits.h>
 
     #define stat_t struct stat
+
+    #define FILE_NAME_MAX NAME_MAX
 #elif defined __linux__
     #include <dirent.h>
     #include <features.h>
     #include <unistd.h>
+    #include <linux/limits.h>
 
     #define stat_t struct stat
 #elif defined __NetBSD__ || defined __DragonFly__
     #include <dirent.h>
     #include <unistd.h>
+    #include <sys/param.h>
+    #include <sys/syslimits.h>
 
     #define stat_t struct stat
 #elif defined __FreeBSD__
     #include <dirent.h>
     #include <sys/sysctl.h>
+    #include <sys/syslimits.h>
 
     #define stat_t struct stat
 #else
