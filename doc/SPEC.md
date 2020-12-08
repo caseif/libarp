@@ -120,6 +120,8 @@ A node descriptor describes and points to either a resource or a directory listi
 Nodes descriptors will contain the CRC-32C checksum of the corresponding data. This may optionally be ignored by the
 unpacker if the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
+The CRC-32C checksum is to be computed per the IEEE 802.3 standard, with a polynomial of `0x1EDC6F41`.
+
 Nodes descriptors pointing to resources may optionally specify a
 [media type](#arp-media-types) describing the type of data contained by
 the resource. This may be left empty, in which case compliant parsers will assume a default type
@@ -141,8 +143,10 @@ characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 | `0xD` | `0x8` | Data length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
 | `0x15` | `0x8` | Uncompressed data length | The length of the uncompressed node data in bytes. If the package does not use compression or this node is a directory, this field will be ignored. |
 | `0x1D` | `0x4` | CRC | The CRC-32C checksum of the node data. |
-| `0x21` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
+| `0x21` | `0x1` | Name length | The length of the node name in bytes, not including a null terminator. |
 | `0x22` | variable | Name | The name of this node as a string, not including a null terminator. |
+| variable | `0x1` | File extension length | The length of the node file extension, if applicable, not including a null terminator. |
+| variable | variable | File extension | The extension of the file this node was generated from, if applicable, not including a null terminator.
 | variable | `0x1` | Media type length | The length of the node media type in bytes, not including a null terminator. |
 | variable | variable | Media type | The media type of this node as an ASCII string, not including a null terminator. |
 
@@ -252,12 +256,14 @@ the path referencing the resource `qux` is `foo:baz/qux`.
 
 ## 8. External Documentation Referenced
 
-- [RFC 1951][1]
-- [RFC 2095][2]
-- [IANA media types registry][3]
-- [httpd: mime.types][4]
+- [IEEE 802.3][1]
+- [RFC 1951][2]
+- [RFC 2095][3]
+- [IANA media types registry][4]
+- [httpd: mime.types][5]
 
-[1]: https://tools.ietf.org/html/rfc1951 (RFC 1951)
-[2]: https://tools.ietf.org/html/rfc2045 (RFC 2045)
-[3]: https://www.iana.org/assignments/media-types/media-types.xhtml (IANA media types registry)
-[4]: https://svn.apache.org/repos/asf/!svn/bc/1884192/httpd/httpd/trunk/docs/conf/mime.types (httpd: mime.types)
+[1]: https://standards.ieee.org/standard/802_3-2018.html (IEEE 802.3)
+[2]: https://tools.ietf.org/html/rfc1951 (RFC 1951)
+[3]: https://tools.ietf.org/html/rfc2045 (RFC 2045)
+[4]: https://www.iana.org/assignments/media-types/media-types.xhtml (IANA media types registry)
+[5]: https://svn.apache.org/repos/asf/!svn/bc/1884192/httpd/httpd/trunk/docs/conf/mime.types (httpd: mime.types)
