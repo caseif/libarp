@@ -95,12 +95,17 @@ A node descriptor describes and points to either a resource or a directory listi
 Nodes descriptors will contain the CRC-32C checksum of the corresponding data. This may optionally be ignored by the
 unpacker if the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
-The maximum length by design for each a node name and node mime type is 255 bytes.
+Nodes descriptors pointing to resources may optionally specify a
+[media type](#ARP_Media_types) describing the type of data contained by
+the resource. This may be left empty, in which case compliant parsers will assume a default type
+of `application/octet-stream`.
+
+Apart from this, parsers are not required to perform any further validation.
+
+The maximum length by design for each a node name and node media type is 255 bytes.
 
 Node names may not contain the characters `/` (forward slash), `\` (back slash), or `:` (colon), nor any control
 characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
-
-Node mime types may not contain any control characters.
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
@@ -113,8 +118,8 @@ Node mime types may not contain any control characters.
 | `0x1D` | `0x4` | CRC | The CRC-32C checksum of the node data. |
 | `0x21` | `0x1` | Name Length | The length of the node name in bytes, not including a null terminator. |
 | `0x22` | variable | Name | The name of this node as a string, not including a null terminator. |
-| variable | `0x1` | Mime type length | The length of the node name in bytes, not including a null terminator. |
-| variable | variable | Mime type | The mime type of this node as a string, not including a null terminator. |
+| variable | `0x1` | Media type length | The length of the node media type in bytes, not including a null terminator. |
+| variable | variable | Media type | The media type of this node as an ASCII string, not including a null terminator. |
 
 #### Body
 
@@ -169,9 +174,42 @@ compression field.
 
 Compression magic must not contain ASCII control characters.
 
-| Magic | Compression Type |
+| Magic | Compression type |
 | :-- | :-- |
-| `df` | [DEFLATE](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Markov_chain_algorithm) |
+| `df` | [DEFLATE][1] |
+
+## ARP Media Types
+
+ARP defines a standard format for media type strings as a variant of the syntax defined in section 5.1 of
+[RFC 2045][2]. This format differs from the RFC in that the preceding "Content-Type:"
+is excluded, and the optional parameter is excluded. As in the standard, ARP media type strings should be present in the
+[IANA media types registry][3] unless the format component
+is prefixed with `x-`.
+
+The ARP standard references the
+[`mime.types`][4] file present in
+Apache's `httpd` project as it appears in revision `1884192` for media type mapping. Additionally, Argus defines a
+number of other mappings which shall supplement and take precedence over the `mime.types` file.
+
+Additionally, packers should provide a mechanism for user-defined mappings to be used. These shall take precedence over
+all other mappings, if applicable, but should typically be used to supplement extensions not covered by the mappings
+specified by the ARP standard.
+
+### ARP-Specific Mappings
+
+| Extension | Media type |
+| :-- | :-- |
+| (no extension) | `application/octet-stream` |
+| `.lua` | `text/x-lua` |
+| `.csh` | `text/x-glsl-comp` |
+| `.comp` | `text/x-glsl-comp` |
+| `.fsh` | `text/x-glsl-frag` |
+| `.frag` | `text/x-glsl-frag` |
+| `.geom` | `text/x-glsl-geom` |
+| `.tesc` | `text/x-glsl-tess-control` |
+| `.tese` | `text/x-glsl-tess-eval` |
+| `.vsh` | `text/x-glsl-vert` |
+| `.vert` | `text/x-glsl-vert` |
 
 ## Referencing Resources
 
@@ -186,3 +224,15 @@ path contains the following components:
 For example, a package has a namespace of `foo`, a resource in the root called `bar`, and a directory in the root called
 `baz`. The `baz` directory contains a resource called `qux`. The path referencing the resource `bar` is `foo:bar`, and
 the path referencing the resource `qux` is `foo:baz/qux`.
+
+## External Documentation Referenced
+
+- [RFC 1951][1]
+- [RFC 2095][2]
+- [IANA media types registry][3]
+- [httpd: mime.types][4]
+
+[1]: https://tools.ietf.org/html/rfc1951 (RFC 1951)
+[2]: https://tools.ietf.org/html/rfc2045 (RFC 2045)
+[3]: https://www.iana.org/assignments/media-types/media-types.xhtml (IANA media types registry)
+[4]: https://svn.apache.org/repos/asf/!svn/bc/1884192/httpd/httpd/trunk/docs/conf/mime.types (httpd: mime.types)
