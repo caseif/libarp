@@ -2,7 +2,37 @@
 
 Version 1.0 (Draft)
 
-## Preface
+## 0. Table of Contents
+
+- [0. Table of Contents](#0-table-of-contents)
+- [1. Purpose](#1-purpose)
+- [2. Definitions](#2-definitions)
+- [3. Versioning](#3-versioning)
+- [4. File Structure](#4-file-structure)
+  - [4.1. Parts](#4.1-parts)
+  - [4.2. File Layout](#4.2-file-layout)
+  - [4.3. Structures](#4.3-structures)
+    - [4.3.1. Header](#4.3.1-header)
+    - [4.3.2. Part Header](#4.3.2-part-header)
+    - [4.3.3. Catalogue](#4.3.3-catalogue)
+      - [4.3.3.1. Node Descriptor](#4.3.3.1-node-descriptor)
+    - [4.3.4. Body](#4.3.4-body)
+    - [4.3.5. Directory Listing](#4.3.5-directory-listing)
+- [5. Magic Values](#5-magic-values)
+  - [5.1. Format Magic](#5.1-format-magic)
+  - [5.2. Part Magic](#5.2-part-magic)
+  - [5.3. Compression Type](#5.3-compression-type)
+- [6. Media Types](#6-media-types)
+  - [6.1. ARP-Specific Mappings](#6.1-arp-specific-mappings)
+- [7. Referencing Resources](#7-referencing-resources)
+- [8. External Documentation Referenced](#8-external-documentation-referenced)
+
+## 1. Purpose
+
+The Argus Resource Package (ARP) format is designed to provide a simple, structured format for packaging static assets
+in a way which is easily and efficiently parsed.
+
+## 2. Definitions
 
 Strictly speaking, the phrase "ARP package" is tautological. However, for the sake of ease of understanding, this shall
 be considered a completely acceptable way of describing a binary structure encoding data in the ARP format, and will be
@@ -12,23 +42,18 @@ Unless otherwise noted, all string values referred to in the format are stored a
 
 Unless otherwise noted, all integer values referred to in the format are encoded as unsigned and little-Endian.
 
-## Purpose
-
-The Argus Resource Package (ARP) format is designed to provide a simple, structured format for packaging static assets
-in a way which is easily and efficiently parsed.
-
-## Versioning
+## 3. Versioning
 
 Each version of the ARP specification is identified by a major version and an incremental version). The incremental
 version is exclusively used for clarifying, corrective, or otherwise backwards-compatible changes. The format version
 specified as a single integer in the header of ARP files corresponds to the major version of the specification that the
 file conforms to.
 
-## File Structure
+## 4. File Structure
 
 ARP packages are contained by files with the extension `.arp`. The maximum file size is `2^64-1` bytes.
 
-### Parts
+### 4.1. Parts
 
 ARP packages may be split into multiple files (parts) if desired. However, this must be explicitly declared in the
 header. A package may have up to 999 parts. The first part has index 1.
@@ -40,7 +65,7 @@ part, which in this case may be named simply `foo.arp`.
 Each part must begin with a 16-byte [Part Header](#part-header) (described below). The body section corresponding to the
 part immediately follows this header.
 
-### File Layout
+### 4.2. File Layout
 
 The first part of an ARP package contains three primary sections: the package header, the directory, and the body. These
 sections are described below.
@@ -48,9 +73,9 @@ sections are described below.
 Subsequent parts do not include the package header or directory structures, Instead, they include a shorter
 [Part Header](#part-header) followed immediately by the body structure.
 
-### Structures
+### 4.3. Structures
 
-#### Header
+#### 4.3.1. Header
 
 The package header describes the meta-attributes of the ARP package. The structure is described below.
 
@@ -72,7 +97,7 @@ The package header describes the meta-attributes of the ARP package. The structu
 The package namespace may not contain the characters `/` (forward slash), `\` (back slash), `:` (colon), , nor any
 control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 
-#### Part Header
+#### 4.3.2. Part Header
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
@@ -80,7 +105,7 @@ control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 | `0x8` | `0x2` | Part Number | The index of this part. This must be between 2 and 999, inclusive. |
 | `0xA` | `0x6` | Reserved | Reserved for future use. |
 
-#### Catalogue
+#### 4.3.3. Catalogue
 
 The catalogue structure is comprised of sequential node descriptors which point to directories and resources in the
 package. The structure of a node descriptor is described below.
@@ -88,7 +113,7 @@ package. The structure of a node descriptor is described below.
 The first node descriptor must describe the root directory of the package. This node has the magic name ""
 (empty string).
 
-##### Node Descriptor
+##### 4.3.3.1. Node Descriptor
 
 A node descriptor describes and points to either a resource or a directory listing within a body section.
 
@@ -96,7 +121,7 @@ Nodes descriptors will contain the CRC-32C checksum of the corresponding data. T
 unpacker if the package specifies a compression scheme which already includes a CRC, such as `bzip2`.
 
 Nodes descriptors pointing to resources may optionally specify a
-[media type](#ARP_Media_types) describing the type of data contained by
+[media type](#arp-media-types) describing the type of data contained by
 the resource. This may be left empty, in which case compliant parsers will assume a default type
 of `application/octet-stream`.
 
@@ -121,7 +146,7 @@ characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 | variable | `0x1` | Media type length | The length of the node media type in bytes, not including a null terminator. |
 | variable | variable | Media type | The media type of this node as an ASCII string, not including a null terminator. |
 
-#### Body
+#### 4.3.4. Body
 
 A body section is comprised of raw resource data. There is no explicit structure in this section. It is organized
 according to the directory section.
@@ -129,7 +154,7 @@ according to the directory section.
 In the first package part, the corresponding body section begins at the offset defined in the package header. In
 subsequent parts, the body immediately follows the header.
 
-#### Directory Listing
+#### 4.3.5. Directory Listing
 
 A directory listing describes the contents of a directory. The structure is extremely simple, containing only a
 tightly-packed array of 4-byte zero-indexed node descriptor indices.
@@ -141,23 +166,23 @@ All directory listings must be defined in the first part of the package.
 
 It is illegal for any directory to contain the root directory (index 0) as a child.
 
-## Magic Values
+## 5. Magic Values
 
 The ARP format makes use of magic values to specify data types in various places. The table below defines the semantic
 meaning of each magic byte.
 
-### Format Magic
+### 5.1. Format Magic
 
 ARP packages must begin with the magic hex sequence `1B` `41` `52` `47` `55` `53` `52` `50` (`0x1B` `ARGUSRP`). Files
 not beginning with this magic are not valid ARP packages.
 
-### Part Magic
+### 5.2. Part Magic
 
 ARP parts following the first must begin with the magic hex sequence `1B` `41` `52` `47` `55` `53` `50` `54` (`0x1B`
 `ARGUSPT`). Parts not beginning with this magic should be rejected. **Note that this is not the same as the format
 magic.**
 
-### Compression Type
+### 5.3. Compression Type
 
 Resources in the archive may be compressed with a number of different schemes. The available formats as well as their
 magic values are described in the table below.
@@ -178,7 +203,7 @@ Compression magic must not contain ASCII control characters.
 | :-- | :-- |
 | `df` | [DEFLATE][1] |
 
-## ARP Media Types
+## 6. Media Types
 
 ARP defines a standard format for media type strings as a variant of the syntax defined in section 5.1 of
 [RFC 2045][2]. This format differs from the RFC in that the preceding "Content-Type:"
@@ -195,7 +220,7 @@ Additionally, packers should provide a mechanism for user-defined mappings to be
 all other mappings, if applicable, but should typically be used to supplement extensions not covered by the mappings
 specified by the ARP standard.
 
-### ARP-Specific Mappings
+### 6.1. ARP-Specific Mappings
 
 | Extension | Media type |
 | :-- | :-- |
@@ -211,7 +236,7 @@ specified by the ARP standard.
 | `.vsh` | `text/x-glsl-vert` |
 | `.vert` | `text/x-glsl-vert` |
 
-## Referencing Resources
+## 7. Referencing Resources
 
 ARP defines an idiomatic way of referencing resources contained by an ARP package via the ARP path specification. An ARP
 path contains the following components:
@@ -225,7 +250,7 @@ For example, a package has a namespace of `foo`, a resource in the root called `
 `baz`. The `baz` directory contains a resource called `qux`. The path referencing the resource `bar` is `foo:bar`, and
 the path referencing the resource `qux` is `foo:baz/qux`.
 
-## External Documentation Referenced
+## 8. External Documentation Referenced
 
 - [RFC 1951][1]
 - [RFC 2095][2]
