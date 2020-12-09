@@ -205,18 +205,18 @@ Compression magic must not contain ASCII control characters.
 
 | Magic | Compression type |
 | :-- | :-- |
-| `df` | [DEFLATE][1] |
+| `df` | [DEFLATE][2] |
 
 ## 6. Media Types
 
 ARP defines a standard format for media type strings as a variant of the syntax defined in section 5.1 of
-[RFC 2045][2]. This format differs from the RFC in that the preceding "Content-Type:"
+[RFC 2045][3]. This format differs from the RFC in that the preceding "Content-Type:"
 is excluded, and the optional parameter is excluded. As in the standard, ARP media type strings should be present in the
-[IANA media types registry][3] unless the format component
+[IANA media types registry][4] unless the format component
 is prefixed with `x-`.
 
 The ARP standard references the
-[`mime.types`][4] file present in
+[`mime.types`][5] file present in
 Apache's `httpd` project as it appears in revision `1884192` for media type mapping. Additionally, Argus defines a
 number of other mappings which shall supplement and take precedence over the `mime.types` file.
 
