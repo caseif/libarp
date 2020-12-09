@@ -62,7 +62,7 @@ Each part file must be named as follows, where `#` represents a digit of the par
 For example, part 2 of package foo will be named `foo.part002.arp`. This naming convention is not required for the first
 part, which in this case may be named simply `foo.arp`.
 
-Each part must begin with a 16-byte [Part Header](#part-header) (described below). The body section corresponding to the
+Each part must begin with a 16-byte [Part Header](#432-part-header) (described below). The body section corresponding to the
 part immediately follows this header.
 
 ### 4.2. File Layout
@@ -71,7 +71,7 @@ The first part of an ARP package contains three primary sections: the package he
 sections are described below.
 
 Subsequent parts do not include the package header or directory structures, Instead, they include a shorter
-[Part Header](#part-header) followed immediately by the body structure.
+[Part Header](#432-part-header) followed immediately by the body structure.
 
 ### 4.3. Structures
 
@@ -83,7 +83,7 @@ The package header describes the meta-attributes of the ARP package. The structu
 | --: | --: | :-: | :-- |
 | `0x0` | `0x8` | Magic | Must be hex sequence `1B` `41` `52` `47` `55` `53` `52` `50` (`0x1B` `ARGUSRP`). |
 | `0x8` | `0x2` | Version | The format major version the package conforms to. Parsers should refuse to parse further if they do not provide explicit support for this major version of the format. |
-| `0xA` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#magic-values) section of this document. |
+| `0xA` | `0x2` | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#5-magic-values) section of this document. |
 | `0xC` | `0x30` | Namespace | The package namespace as a string. |
 | `0x3C` | `0x2` | Parts | The number of files comprising this package. This value must be between 1 and 999, inclusive. |
 | `0x3E`| `0x8` | Catalogue Offset | The offset in bytes of the catalogue section, starting from the beginning of the package header. |
@@ -123,7 +123,7 @@ unpacker if the package specifies a compression scheme which already includes a 
 The CRC-32C checksum is to be computed per the IEEE 802.3 standard, with a polynomial of `0x1EDC6F41`.
 
 Nodes descriptors pointing to resources may optionally specify a
-[media type](#arp-media-types) describing the type of data contained by
+[media type](#6-media-types) describing the type of data contained by
 the resource. This may be left empty, in which case compliant parsers will assume a default type
 of `application/octet-stream`.
 
