@@ -117,7 +117,7 @@ static fs_node_t *_create_fs_tree(const char *root_path, link_behavior_t link_be
 
     HANDLE find_handle = FindFirstFileA(root_path, &find_data);
     if (find_handle == INVALID_HANDLE_VALUE) {
-        return res;
+        return NULL;
     }
 
     do {
