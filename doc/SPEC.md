@@ -258,7 +258,7 @@ the path referencing the resource `qux` is `foo:baz/qux`.
 
 - [IEEE 802.3][1]
 - [RFC 1951][2]
-- [RFC 2095][3]
+- [RFC 2045][3]
 - [IANA media types registry][4]
 - [httpd: mime.types][5]
 
