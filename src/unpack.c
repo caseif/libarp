@@ -316,7 +316,7 @@ static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
     return memcmp(a->name, b->name, MIN(a->name_len_s, b->name_len_s));
 }
 
-static int _read_var_string(void *catalogue, size_t *cur_off, char **target, size_t str_len_s) {
+static int _read_var_string(const void *catalogue, size_t *cur_off, char **target, size_t str_len_s) {
     if (str_len_s > 0) {    
         char tmp[256];
         _copy_str_to_field(tmp, catalogue, str_len_s, cur_off);
