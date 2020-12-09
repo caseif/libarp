@@ -14,9 +14,11 @@ typedef struct NodeDesc {
     uint64_t data_uc_len;
     uint32_t crc;
     uint8_t name_len_s;
+    uint8_t ext_len_s;
+    uint8_t media_type_len_s;
     char *name;
-    uint8_t mime_len_s;
-    char *mime_type;
+    char *ext;
+    char *media_type;
 
     arp_resource_t *loaded_data;
     bt_node_t *children_tree;

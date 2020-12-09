@@ -316,6 +316,24 @@ static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
     return memcmp(a->name, b->name, MIN(a->name_len_s, b->name_len_s));
 }
 
+static int _read_var_string(void *catalogue, size_t *cur_off, char **target, size_t str_len_s) {
+    if (str_len_s > 0) {    
+        char tmp[256];
+        _copy_str_to_field(tmp, catalogue, str_len_s, cur_off);
+        *target[str_len_s] = '\0';
+
+        if ((*target = malloc(str_len_s + 1)) == NULL) {
+            libarp_set_error("malloc failed");
+            return -1;
+        }
+        memcpy(*target, tmp, str_len_s + 1);
+    } else {
+        *target = NULL;
+    }
+
+    return 0;
+}
+
 static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
         libarp_set_error("calloc failed");
@@ -334,7 +352,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         uint16_t node_desc_len;
         _copy_int_to_field(&node_desc_len, catalogue, 2, &cur_off);
 
-        if (node_desc_len < NODE_DESC_MIN_LEN) {
+        if (node_desc_len < NODE_DESC_BASE_LEN) {
             libarp_set_error("Node descriptor is too small");
             return -1;
         } else if (node_desc_len > NODE_DESC_MAX_LEN) {
@@ -361,58 +379,27 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         _copy_int_to_field(&node->data_uc_len, catalogue, 8, &cur_off);
         _copy_int_to_field(&node->crc, catalogue, 4, &cur_off);
         _copy_int_to_field(&node->name_len_s, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->ext_len_s, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->media_type_len_s, catalogue, 1, &cur_off);
+
+        if (NODE_DESC_BASE_LEN + node->name_len_s + node->media_type_len_s > node_desc_len) {
+            libarp_set_error("Variable string lengths mismatch descriptor length");
+            return -1;
+        }
 
         if (i == 0 && node->name_len_s > 0) {
             libarp_set_error("Root node name must be empty string");
             return -1;
         }
 
-        if (node->name_len_s > 0) {
-            if (NODE_DESC_MIN_LEN + node->name_len_s > node_desc_len) {
-                libarp_set_error("Node name length mismatches descriptor length");
-                return -1;
-            }
-        
-            char node_name_tmp[256];
-            _copy_str_to_field(node_name_tmp, catalogue, node->name_len_s, &cur_off);
-            node->name[node->name_len_s] = '\0';
-
-            if ((node->name = malloc(node->name_len_s + 1)) == NULL) {
-                libarp_set_error("malloc failed");
-                return -1;
-            }
-            memcpy(node->name, node_name_tmp, node->name_len_s + 1);
-        } else {
-            node->name = NULL;
+        if (node->type == PACK_NODE_TYPE_DIRECTORY && node->media_type_len_s > 0) {
+            libarp_set_error("Directory nodes may not have media types");
+            return -1;
         }
 
-        _copy_int_to_field(&node->mime_len_s, catalogue, 1, &cur_off);
-
-        if (node->mime_len_s > 0) {
-            if (node->type == PACK_NODE_TYPE_DIRECTORY) {
-                libarp_set_error("Directory nodes may not have mime types");
-                return -1;
-            }
-
-            if (NODE_DESC_MIN_LEN + node->name_len_s + node->mime_len_s > node_desc_len) {
-                libarp_set_error("Node name and mime lengths mismatch descriptor length");
-                return -1;
-            }
-
-
-            char node_mime_tmp[256];
-            _copy_str_to_field(node_mime_tmp, catalogue, node->mime_len_s, &cur_off);
-            node_mime_tmp[node->mime_len_s] = '\0';
-
-
-            if ((node->name = malloc(node->mime_len_s + 1)) == NULL) {
-                libarp_set_error("malloc failed");
-                return -1;
-            }
-            memcpy(node->mime_type, node_mime_tmp, node->mime_len_s + 1);
-        } else {
-            node->mime_type = NULL;
-        }
+        _read_var_string(catalogue, &cur_off, &node->name, node->name_len_s);
+        _read_var_string(catalogue, &cur_off, &node->ext, node->ext_len_s);
+        _read_var_string(catalogue, &cur_off, &node->media_type, node->media_type_len_s);
 
         validate_path_component(node->name, node->name_len_s);
 
@@ -629,8 +616,12 @@ static void _unload_node(node_desc_t *node) {
             free(node->name);
         }
 
-        if (node->mime_type != NULL) {
-            free(node->mime_type);
+        if (node->ext != NULL) {
+            free(node->ext);
+        }
+
+        if (node->media_type != NULL) {
+            free(node->media_type);
         }
         
         free(node);
