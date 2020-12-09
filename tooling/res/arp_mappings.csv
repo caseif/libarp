@@ -1,0 +1,11 @@
+,application/octet-stream
+lua,text/x-lua
+csh,text/x-glsl-comp
+comp,text/x-glsl-comp
+fsh,text/x-glsl-frag
+frag,text/x-glsl-frag
+geom,text/x-glsl-geom
+tesc,text/x-glsl-tess-control
+tese,text/x-glsl-tess-eval
+vsh,text/x-glsl-vert
+vert,text/x-glsl-vert
