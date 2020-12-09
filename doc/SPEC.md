@@ -144,10 +144,10 @@ characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 | `0x15` | `0x8` | Uncompressed data length | The length of the uncompressed node data in bytes. If the package does not use compression or this node is a directory, this field will be ignored. |
 | `0x1D` | `0x4` | CRC | The CRC-32C checksum of the node data. |
 | `0x21` | `0x1` | Name length | The length of the node name in bytes, not including a null terminator. |
-| `0x22` | variable | Name | The name of this node as a string, not including a null terminator. |
-| variable | `0x1` | File extension length | The length of the node file extension, if applicable, not including a null terminator. |
+| `0x22` | `0x1` | File extension length | The length of the node file extension, if applicable, not including a null terminator. |
+| `0x23` | `0x1` | Media type length | The length of the node media type in bytes, not including a null terminator. |
+| `0x24` | variable | Name | The name of this node as a string, not including a null terminator. |
 | variable | variable | File extension | The extension of the file this node was generated from, if applicable, not including a null terminator.
-| variable | `0x1` | Media type length | The length of the node media type in bytes, not including a null terminator. |
 | variable | variable | Media type | The media type of this node as an ASCII string, not including a null terminator. |
 
 #### 4.3.4. Body
