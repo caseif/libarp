@@ -8,7 +8,7 @@ ARP_MAPPINGS_PATH = "./res/arp_mappings.csv"
 APACHE_MAPPINGS_PATH = "./res/mime.types"
 
 OUTPUT_DIR = "./output/"
-OUTPUT_PATH = "./output/full_mappings.csv"
+OUTPUT_PATH = "./output/media_types.csv"
 
 APACHE_COMMENT_CHAR = '#'
 
@@ -74,7 +74,7 @@ end
 def consolidate_mappings()
     mappings = process_input()
     generate_output(mappings)
-    puts "Success, output written to #{OUTPUT_PATH}"
+    puts "Success, output written to #{File.expand_path OUTPUT_PATH}"
 end
 
 consolidate_mappings()

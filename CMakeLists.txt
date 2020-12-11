@@ -53,8 +53,35 @@ endif()
 add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
 
-set(SRC_DIR "src")
-set(INC_DIR "include")
+set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
+set(INC_DIR "${CMAKE_SOURCE_DIR}/include")
+set(TOOLING_DIR "${CMAKE_SOURCE_DIR}/tooling")
+
+set(GENERATED_SRC_DIR "${SRC_DIR}/generated")
+set(GENERATED_INC_DIR "${INC_DIR}/generated")
+
+# generate resource sources
+# first we generate a master media type map
+message("Generating resource sources")
+execute_process(COMMAND "ruby" "${TOOLING_DIR}/generate_mt_mappings.rb"
+    WORKING_DIRECTORY "${TOOLING_DIR}"
+    RESULT_VARIABLE CMD_RES)
+if(CMD_RES)
+  message(FATAL_ERROR "    generate_mt_mappings.rb: ${CMD_RES}")
+endif()
+
+# then we generate the actual source files
+file(MAKE_DIRECTORY "${GENERATED_SRC_DIR}")
+file(MAKE_DIRECTORY "${GENERATED_INC_DIR}")
+execute_process(COMMAND "ruby" "${TOOLING_DIR}/bin2c/bin2c.rb"
+      "${TOOLING_DIR}/output/media_types.csv"
+      "-h ${GENERATED_INC_DIR}/"
+      "-c ${GENERATED_SRC_DIR}/"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE CMD_RES)
+if(CMD_RES)
+  message(FATAL_ERROR "    bin2c.rb: ${CMD_RES}")
+endif()
 
 # source files
 file(GLOB C_FILES ${SRC_DIR}/*.c)
@@ -75,11 +102,11 @@ add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
     make_directory ${HDR_OUT_DIR})
 add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E
-    copy_directory "${CMAKE_SOURCE_DIR}/${INC_DIR}/${CMAKE_PROJECT_NAME}/" "${HDR_OUT_DIR}/${CMAKE_PROJECT_NAME}/")
+    copy_directory "${INC_DIR}/${CMAKE_PROJECT_NAME}/" "${HDR_OUT_DIR}/${CMAKE_PROJECT_NAME}/")
 
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
 
-target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}/${INC_DIR}")
+target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR}")
 
 if(${LIBARP_FEATURE_DEFLATE})
   target_include_directories("${PROJECT_NAME}" PUBLIC "${ZLIB_INCLUDE_DIR}")

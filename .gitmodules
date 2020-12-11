@@ -1,3 +1,6 @@
 [submodule "libs/zlib"]
 	path = libs/zlib
 	url = https://github.com/madler/zlib.git
+[submodule "tooling/bin2c"]
+	path = tooling/bin2c
+	url = https://github.com/caseif/bin2c.git
