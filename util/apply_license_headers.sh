@@ -70,7 +70,7 @@ while read -r file; do
     output="${output:0:-1}"
     # finally, write it to disk!
     printf "$output" > $file
-done <<< $(find "./src" -type f \( -iname "*.c" -or -iname "*.h" -or -iname "*.cpp" -or -iname "*.hpp" \))
+done <<< $(find "./include" "./src" -type f \( -iname "*.c" -or -iname "*.h" -or -iname "*.cpp" -or -iname "*.hpp" \))
 
 # if we didn't update anything, say so (to avoid zero-output)
 if [ $count -eq 0 ]; then
