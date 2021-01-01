@@ -13,23 +13,32 @@
 
 #include "internal/bt.h"
 
+typedef struct CsvFile {
+    bt_node_t *tree;
+    void *data;
+} csv_file_t;
+
 /**
- * Parses a CSV contained by `buf`. The generated binary tree will contain
- * pointers to data within `buf`, so it must not be freed until the binary tree
- * is no longer needed.
+ * Parses the CSV resulting from the concatenation of `stock_csv` and
+ * `user_csv`. The data is copied to a separate buffer, so the input buffers may
+ * be disposed of after this function is called.
  *
- * This parser is domain-specific and does not support escape characters, quoted
- * strings, comments, or headers. Additionally, it expects exactly one comma per
- * line for a total of two columns.
+ * This parser is extremely domain-specific and does not support escape
+ * characters, quoted strings, comments, or headers. Additionally, it expects
+ * exactly one comma per line for a total of two columns.
  * 
- * To deallocate the binary tree, the returned `bt_node_t` as well as the
- * pointer written to `data_buf` must be free'd directly.
+ * To deallocate the binary tree, `free_csv` must be called.
  */
-bt_node_t *parse_csv(const void *csv_data, size_t len, void **tree_data);
+csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_csv, size_t user_len);
 
 /**
  * Attempts to find the given key in the CSV represented by the passed binary
  * tree and returns its value. If the key is not present, `NULL` is returned
  * instead.
  */
-const char *search_csv(const bt_node_t *root, const char *key);
+const char *search_csv(const csv_file_t *csv, const char *key);
+
+/**
+ * Releases the memory occupied by the CSV object.
+ */
+void free_csv(csv_file_t *csv);

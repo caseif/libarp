@@ -9,9 +9,13 @@
 
 #pragma once
 
+#include <stddef.h>
+
 struct BtNode;
 
 typedef struct BtNode {
+    // this count includes the top-level node itself
+    size_t children_count;
     struct BtNode *l;
     struct BtNode *r;
     void *data;

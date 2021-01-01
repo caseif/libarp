@@ -58,7 +58,7 @@ set(INC_DIR "${CMAKE_SOURCE_DIR}/include")
 set(TOOLING_DIR "${CMAKE_SOURCE_DIR}/tooling")
 
 set(GENERATED_SRC_DIR "${SRC_DIR}/generated")
-set(GENERATED_INC_DIR "${INC_DIR}/generated")
+set(GENERATED_INC_DIR "${INC_DIR}/internal/generated")
 
 # generate resource sources
 # first we generate a master media type map

@@ -21,12 +21,17 @@
 #include <sys/mman.h>
 #endif
 
+// This function actually works for both copying LE file data to BE system
+// memory, and vice versa. all we care about is if the source and target
+// endianness mismatch (which will only happen if the system is BE since the
+// file data is guaranteed to be LE), so simply flipping the bytes in this case
+// will work regardless of which direction we're copying.
 void copy_int_as_le(void *dst, void *src, size_t len) {
     memcpy(dst, src, len);
 
     int x = 0;
     if (((unsigned char*) &x)[0] == 0) {
-        // system is big-Endian, so we need to convert to little
+        // system is big-endian, so we need to convert to little
         #ifdef _WIN32
         if (len == 2) {
             *((uint16_t*) dst) = _byteswap_ushort(*((uint16_t*) dst));

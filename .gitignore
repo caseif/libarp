@@ -433,6 +433,5 @@ MigrationBackup/
 # End of https://www.gitignore.io/api/c,cmake,visualstudio,visualstudiocode
 
 build/
-include/generated/
-src/generated/
+generated/
 tooling/output/

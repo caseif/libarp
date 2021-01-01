@@ -58,8 +58,8 @@
 #define NODE_DESC_BASE_LEN 0x23
 #define NODE_NAME_MAX_LEN 0xFF
 #define NODE_EXT_MAX_LEN 0xFF
-#define NODE_MIME_MAX_LEN 0xFF
-#define NODE_DESC_MAX_LEN (NODE_DESC_BASE_LEN + NODE_NAME_MAX_LEN + NODE_EXT_MAX_LEN + NODE_MIME_MAX_LEN)
+#define NODE_MT_MAX_LEN 0xFF
+#define NODE_DESC_MAX_LEN (NODE_DESC_BASE_LEN + NODE_NAME_MAX_LEN + NODE_EXT_MAX_LEN + NODE_MT_MAX_LEN)
 
 #define NODE_DESC_LEN_OFF           0x00
 #define NODE_DESC_TYPE_OFF          0x02
@@ -70,9 +70,11 @@
 #define NODE_DESC_CRC_OFF           0x1D
 #define NODE_DESC_NAME_LEN_OFF      0x21
 #define NODE_DESC_EXT_LEN_OFF       0x22
-#define NODE_DESC_MIME_LEN_OFF     0x23
+#define NODE_DESC_MT_LEN_OFF        0x23
 #define NODE_DESC_NAME_OFF          0x24
 
+// the length of an index to a node descriptor
+// directory nodes contain an array of node descriptor indices in their body
 #define NODE_DESCRIPTOR_INDEX_LEN 4
 
 #define PACK_NODE_TYPE_RESOURCE 0
@@ -81,4 +83,4 @@
 #define DIRECTORY_CONTENT_MAX_LEN 4294967296 * 4 // we need _some_ sane limit
 
 #define NAMESPACE_DELIM ':'
-#define PATH_DELIM '/'
+#define PACKAGE_PATH_DELIM '/'

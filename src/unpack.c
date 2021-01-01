@@ -19,6 +19,7 @@
 #include "zlib.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -134,10 +135,11 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
 }
 
 static int _validate_part_files(argus_package_t *pack, const char *primary_path) {
+    char *real_path;
     #ifdef _WIN32
-    char *real_path = _fullpath(NULL, primary_path, (size_t) -1);
+    real_path = _fullpath(NULL, primary_path, (size_t) -1);
     #else
-    char *real_path = realpath(primary_path, NULL);
+    real_path = realpath(primary_path, NULL);
     #endif
     if (real_path == NULL) {
         libarp_set_error("Failed to get absolute path of package file");
@@ -538,7 +540,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
 
     void *pack_data_view;
     #ifdef _WIN32
-    HANDLE file_mapping = CreateFileMappingA(package_file, NULL, PAGE_READONLY,
+    HANDLE file_mapping = CreateFileMappingW(package_file, NULL, PAGE_READONLY,
             package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
     pack_data_view = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size);
     #else
@@ -703,7 +705,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     // start at root
     node_desc_t *cur_node = real_pack->all_nodes[0];
 
-    while ((needle = strchr(path_tail, PATH_DELIM)) != NULL) {
+    while ((needle = strchr(path_tail, PACKAGE_PATH_DELIM)) != NULL) {
         cursor = needle - path_tail;
 
         path_tail[cursor] = '\0';

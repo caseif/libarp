@@ -29,8 +29,6 @@
     #include <sys/syslimits.h>
 
     #define stat_t struct stat
-
-    #define FILE_NAME_MAX NAME_MAX
 #elif defined __linux__
     #include <dirent.h>
     #include <features.h>

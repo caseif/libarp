@@ -22,15 +22,17 @@ typedef struct ArpPackingOptions {
     char *pack_namespace;
     size_t max_part_len;
     char *compression_type;
-    link_behavior_t link_behavior;
+    char *media_types_path;
 } arp_packing_options_t;
 
 typedef struct FsNode {
     unsigned char type;
-    char *name;
+    char *target_path;
+    char *file_stem;
+    char *file_ext;
+    char *media_type;
     struct FsNode **children;
     size_t children_count;
-    char *link_target;
 
     size_t index;
     uint16_t part;
