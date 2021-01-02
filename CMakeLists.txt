@@ -84,8 +84,8 @@ if(CMD_RES)
 endif()
 
 # source files
-file(GLOB C_FILES ${SRC_DIR}/*.c)
-file(GLOB H_FILES ${SRC_DIR}/*.h)
+file(GLOB_RECURSE C_FILES ${SRC_DIR}/*.c)
+file(GLOB_RECURSE H_FILES ${SRC_DIR}/*.h)
 
 set(DIST_DIR "${CMAKE_BINARY_DIR}/dist")
 
