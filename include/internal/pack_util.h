@@ -31,6 +31,7 @@ typedef struct FsNode {
     char *file_stem;
     char *file_ext;
     char *media_type;
+    size_t size;
     struct FsNode **children;
     size_t children_count;
 

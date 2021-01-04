@@ -18,11 +18,16 @@
 #include "internal/util.h"
 #include "internal/generated/media_types.csv.h"
 
+#include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef _WIN32
+#include <libgen.h>
+#endif
 
 #define CURRENT_MAJOR_VERSION 1
 
@@ -50,6 +55,11 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
 
     if (compression_type_len_s != 0 && compression_type_len_s != PACKAGE_COMPRESSION_LEN) {
         libarp_set_error("Compression type magic length is incorrect");
+        return NULL;
+    }
+
+    if (max_part_len < PACKAGE_MIN_PART_LEN) {
+        libarp_set_error("Max part length is too small");
         return NULL;
     }
 
@@ -196,180 +206,237 @@ static fs_node_t *_create_fs_tree(const char *root_path) {
     } while (FindNextFileW(find_handle, &find_data) != 0);
 }
 #else
-static fs_node_t *_create_fs_tree(const char *root_path) {
+static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_t **res) {
     static uint8_t recursion_count = 0;
 
     // we only need to do the nesting limit check in this function because once
     // the fs tree is constructed, it's guaranteed to be within the limit
     if (recursion_count > FILE_NESTING_LIMIT) {
         libarp_set_error("File nesting limit reached");
-        return NULL;
+        return -1;
     }
 
     DIR *root;
     if ((root = opendir(root_path)) == NULL) {
         libarp_set_error("Failed to open directory");
-        return NULL;
+        return -1;
     }
 
     fs_node_t *node;
-    if ((node = malloc(sizeof(fs_node_t))) == NULL) {
-        libarp_set_error("malloc failed");
-        return NULL;
+    if ((node = calloc(1, sizeof(fs_node_t))) == NULL) {
+        libarp_set_error("calloc failed");
+        return ENOMEM;
     }
 
-    node->type = FS_NODE_TYPE_DIR;
-    // we explicitly set the name and ext to null - the caller will set it if necessary
-    node->file_stem = NULL;
-    node->file_ext = NULL;
+    stat_t root_stat;
+    if (stat(root_path, &root_stat) != 0) {
+        _free_fs_node(node);
 
-    char *child_full_path;
-    if ((child_full_path = malloc(strlen(root_path) + 1 + NAME_MAX + 1)) == NULL) {
-        free(node);
-
-        libarp_set_error("malloc failed");
-        return NULL;
+        libarp_set_error("stat failed");
+        return -1;
     }
 
-    struct dirent *de;
-    while ((de = readdir(root)) != NULL) {
-        sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
+    if (S_ISDIR(root_stat.st_mode)) {
+        node->type = FS_NODE_TYPE_DIR;
+        // calloc sets the name and ext to null - the caller will set these if necessary
 
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
-            continue;
+        char *child_full_path;
+        if ((child_full_path = malloc(strlen(root_path) + 1 + NAME_MAX + 1)) == NULL) {
+            _free_fs_node(node);
+
+            libarp_set_error("malloc failed");
+            return ENOMEM;
         }
 
-        stat_t child_stat;
-        stat(child_full_path, &child_stat);
+        struct dirent *de;
+        while ((de = readdir(root)) != NULL) {
+            sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
 
-        if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)
-                || S_ISLNK(child_stat.st_mode)) {
-            node->children_count++;
-        }
-    }
-
-    if ((node->children = malloc(sizeof(void*) * node->children_count)) == NULL) {
-        free(child_full_path);
-        free(node);
-
-        libarp_set_error("malloc failed");
-        return NULL;
-    }
-
-    size_t child_index = 0;
-    while ((de = readdir(root)) != NULL) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
-            continue;
-        }
-
-        sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
-
-        stat_t child_stat;
-        stat(child_full_path, &child_stat);
-
-        fs_node_t *child_node;
-        if (S_ISDIR(child_stat.st_mode)) {
-            recursion_count++;
-            child_node = _create_fs_tree(child_full_path);
-            recursion_count--;
-        } else if (S_ISREG(child_stat.st_mode) || S_ISLNK(child_stat.st_mode)) {
-            if ((child_node = malloc(sizeof(fs_node_t))) == NULL) {
-                free(child_full_path);
-                _free_fs_node(node);
-
-                libarp_set_error("malloc failed");
-                return NULL;
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
+                continue;
             }
 
-            child_node->type = S_ISREG(child_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
+            stat_t child_stat;
+            stat(child_full_path, &child_stat);
+
+            if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)
+                    || S_ISLNK(child_stat.st_mode)) {
+                node->children_count++;
+            }
         }
 
-        #ifdef _WIN32
-        char win32_path_buffer[MAX_PATH + 1];
-        size_t win32_path_len = GetFullPathNameW(child_full_path, MAX_PATH + 1, win32_path_buffer, NULL);
-
-        if (win32_path_len == 0 || win32_path_len > MAX_PATH + 1) {
+        if ((node->children = malloc(sizeof(void*) * node->children_count)) == NULL) {
             free(child_full_path);
             _free_fs_node(node);
-            
-            libarp_set_error("Failed to get full file path");
-            return NULL;
-        }
 
-        if ((child_node->target_path = malloc(win32_path_len)) == NULL) {
-            free(child_full_path);
-            _free_fs_node(node);
-            
             libarp_set_error("malloc failed");
-            return NULL;
+            return ENOMEM;
         }
 
-        memcpy(child_node->target_path, win32_path_buffer, win32_path_len);
-        #else
-        // realpath returns a malloc'd string, so assigning it directly is fine
-        child_node->target_path = realpath(child_full_path, NULL);
-        #endif
+        size_t child_index = 0;
+        while ((de = readdir(root)) != NULL) {
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
+                continue;
+            }
 
-        size_t stem_len_s;
-        size_t ext_len_s;
-        const char *ext_delim;
+            sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
 
-        if (child_node->type == FS_NODE_TYPE_DIR) {
-            stem_len_s = strlen(de->d_name);
+            stat_t child_stat;
+            stat(child_full_path, &child_stat);
+
+            fs_node_t *child_node;
+            recursion_count++;
+            {
+                int rc = _create_fs_tree(child_full_path, media_types, &child_node);
+                if (rc != 0) {
+                    free(child_full_path);
+
+                    *res = NULL;
+                    return rc;
+                }
+            }
+            recursion_count--;
+
+            node->children[child_index] = child_node;
+
+            child_index++;
+        }
+
+        free(child_full_path);
+
+        closedir(root);
+    } else if (S_ISREG(root_stat.st_mode) || S_ISLNK(root_stat.st_mode)) {
+        fs_node_t *child_node;
+
+        if ((child_node = malloc(sizeof(fs_node_t))) == NULL) {
+            _free_fs_node(node);
+
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+
+        child_node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
+    } else {
+        free(node);
+        
+        *res = NULL;
+        return 0;
+    }
+    
+    #ifdef _WIN32
+    char win32_path_buffer[MAX_PATH + 1];
+    size_t win32_path_len = GetFullPathNameW(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
+
+    if (win32_path_len == 0 || win32_path_len > MAX_PATH + 1) {
+        _free_fs_node(node);
+        
+        libarp_set_error("Failed to get full file path");
+        return -1;
+    }
+
+    if ((node->target_path = malloc(win32_path_len)) == NULL) {
+        _free_fs_node(node);
+        
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    memcpy(node->target_path, win32_path_buffer, win32_path_len);
+    #else
+    // realpath returns a malloc'd string, so assigning it directly is fine
+    node->target_path = realpath(root_path, NULL);
+    #endif
+
+    char *path_copy;
+    if ((path_copy = strdup(root_path)) == NULL) {
+        _free_fs_node(node);
+
+        libarp_set_error("strdup failed");
+        return ENOMEM;
+    }
+    
+    char *file_name;
+    #ifdef _WIN32
+    file_name = path_copy;
+    PathStripPathW(file_name);
+    #else
+    if ((file_name = basename(path_copy)) == NULL) {
+        free(path_copy);
+        _free_fs_node(node);
+
+        libarp_set_error("basename failed");
+        return -1;
+    }
+    #endif
+
+    size_t stem_len_s;
+    size_t ext_len_s;
+    const char *ext_delim;
+
+    if (node->type == FS_NODE_TYPE_DIR) {
+        stem_len_s = strlen(file_name);
+        ext_len_s = 0;
+    } else {
+        ext_delim = strrchr(file_name, '.');
+
+        // file is considered to have no extension if:
+        //   there is no dot, or
+        //   the name starts with a dot and has no other dots, or
+        //   the name ends with a dot
+        if (ext_delim == NULL
+                || ext_delim == file_name
+                || (size_t) (ext_delim - file_name) == strlen(file_name)) {
+            // file has no extension (or starts with a dot and has no other dot)
+            stem_len_s = strlen(file_name);
             ext_len_s = 0;
         } else {
-            ext_delim = strrchr(de->d_name, '.');
-
-            // file is considered to have no extension if:
-            //   there is no dot, or
-            //   the name starts with a dot and has no other dots, or
-            //   the name ends with a dot
-            if (ext_delim == NULL
-                    || ext_delim == de->d_name
-                    || (size_t) (ext_delim - de->d_name) == strlen(de->d_name)) {
-                // file has no extension (or starts with a dot and has no other dot)
-                stem_len_s = strlen(de->d_name);
-                ext_len_s = 0;
-            } else {
-                stem_len_s = (size_t) (ext_delim - de->d_name);
-                ext_len_s = strlen(de->d_name) - stem_len_s - 1;
-            }
+            stem_len_s = (size_t) (ext_delim - file_name);
+            ext_len_s = strlen(file_name) - stem_len_s - 1;
         }
+    }
 
-        if ((child_node->file_stem = malloc(stem_len_s + 1)) == NULL) {
-            free(child_node);
-            free(child_full_path);
+    if ((node->file_stem = malloc(stem_len_s + 1)) == NULL) {
+        free(path_copy);
+        _free_fs_node(node);
+
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    memcpy(node->file_stem, file_name, stem_len_s);
+    
+    if (ext_len_s > 0) {
+        if ((node->file_ext = malloc(ext_len_s + 1)) == NULL) {
+            free(path_copy);
             _free_fs_node(node);
 
             libarp_set_error("malloc failed");
-            return NULL;
+            return ENOMEM;
         }
 
-        memcpy(child_node->file_stem, de->d_name, stem_len_s);
-        
-        if (ext_len_s > 0) {
-            if ((child_node->file_stem = malloc(ext_len_s + 1)) == NULL) {
-                free(child_node);
-                free(child_full_path);
-                _free_fs_node(node);
-
-                libarp_set_error("malloc failed");
-                return NULL;
-            }
-
-            memcpy(child_node->file_ext, (const void*) (de->d_name + stem_len_s + 1), ext_len_s);
-        }
-
-        node->children[child_index] = child_node;
-
-        child_index++;
+        memcpy(node->file_ext, (const void*) (file_name + stem_len_s + 1), ext_len_s);
     }
 
-    free(child_full_path);
+    free(path_copy);
 
-    closedir(root);
+    if (node->type != FS_NODE_TYPE_DIR) {
+        const char *media_type = ext_len_s > 0 ? search_csv(media_types, node->file_ext) : DEFAULT_MEDIA_TYPE;
+        if (media_type == NULL || strlen(media_type) == 0 || strlen(media_type) > NODE_MT_MAX_LEN) {
+            media_type = DEFAULT_MEDIA_TYPE;
+        }
+        
+        if ((node->media_type = malloc(strlen(media_type) + 1)) == NULL) {
+            _free_fs_node(node);
 
-    return node;
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+
+        memcpy(node->media_type, media_type, strlen(media_type) + 1);
+    }
+
+    *res = node;
+    return 0;
 }
 #endif
 
@@ -436,28 +503,20 @@ static fs_node_t **_flatten_fs(fs_node_t *root) {
 }
 
 // forward declaration required for recursive calls
-static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, const csv_file_t *media_types, size_t *cat_len,
+static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, size_t *cat_len,
         size_t *body_len);
 
-static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, const csv_file_t *media_types, size_t *cat_len,
+static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, size_t *cat_len,
         size_t *body_len) {
     size_t stem_len_s = strlen(fs_root->file_stem);
 
     if (fs_root->type == FS_NODE_TYPE_FILE || fs_root->type == FS_NODE_TYPE_LINK) {
         size_t ext_len_s = 0;
-        size_t media_type_len_s = 0;
         if (fs_root->file_ext != NULL) {
             ext_len_s = strlen(fs_root->file_ext);
-
-            const char *media_type = search_csv(media_types, fs_root->file_ext);
-            if (media_type != NULL) {
-                media_type_len_s = strlen(media_type);
-            }
-
-            if (media_type_len_s > NODE_MT_MAX_LEN) {
-                media_type_len_s = 0;
-            }
         }
+
+        size_t media_type_len_s = strlen(fs_root->media_type);
 
         if (media_type_len_s == 0) {
             media_type_len_s = sizeof(DEFAULT_MEDIA_TYPE) - 1;
@@ -477,7 +536,7 @@ static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, const csv_f
         *body_len *= fs_root->children_count * NODE_DESCRIPTOR_INDEX_LEN;
 
         for (size_t i = 0; i < fs_root->children_count; i++) {
-            int rc = _compute_catalogue_and_body_len(fs_root->children[i], media_types, cat_len, body_len);
+            int rc = _compute_catalogue_and_body_len(fs_root->children[i], cat_len, body_len);
             if (rc != 0) {
                 return rc;
             }
@@ -490,27 +549,92 @@ static int _compute_catalogue_and_body_len(const fs_node_t *fs_root, const csv_f
     return 0;
 }
 
+// forward declaration required for recursive calls
+static int _compute_required_part_count(const fs_node_t *fs_root, size_t max_part_len, size_t catalogue_len,
+        size_t *required_parts);
+
+static int _compute_required_part_count(const fs_node_t *fs_root, size_t max_part_len, size_t catalogue_len,
+        size_t *required_parts) {
+    static size_t cur_part_off = 0;
+
+    if (*required_parts == 0) {
+        *required_parts = 1;
+        cur_part_off = PACKAGE_HEADER_LEN + catalogue_len;
+
+        if (cur_part_off > max_part_len) {
+            libarp_set_error("Max part length is too small to fit package header and catalogue");
+            return -1;
+        } else if (cur_part_off == max_part_len) {
+            *required_parts += 1;
+            cur_part_off = 0;
+        }
+    }
+
+    if (fs_root->type == FS_NODE_TYPE_DIR) {
+        for (size_t i = 0; i < fs_root->children_count; i++) {
+            int rc = _compute_required_part_count(fs_root->children[i], max_part_len, catalogue_len, required_parts);
+            if (rc != 0) {
+                return rc;
+            }
+        }
+
+        return 0;
+    } else if (fs_root->type == FS_NODE_TYPE_FILE || fs_root->type == FS_NODE_TYPE_LINK) {
+        size_t new_off = cur_part_off + fs_root->size;
+        if (new_off > max_part_len) {
+            *required_parts += 1;
+            cur_part_off = 0;
+
+            if (*required_parts > 999) {
+                libarp_set_error("Max part length would require >999 parts");
+                return -1;
+            }
+        }
+
+        cur_part_off += fs_root->size;
+
+        return 0;
+    } else {
+        return 0;
+    }
+}
+
 int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts) {
     arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
 
     csv_file_t *media_types = _load_media_types(real_opts);
 
-    fs_node_t *fs_tree = _create_fs_tree(src_path);
+    fs_node_t *fs_tree;
+    int rc = _create_fs_tree(src_path, media_types, &fs_tree);
+    if (rc != 0) {
+        return rc;
+    }
 
     size_t cat_len;
     size_t body_len;
-    _compute_catalogue_and_body_len(fs_tree, media_types, &cat_len, &body_len);
+    rc = _compute_catalogue_and_body_len(fs_tree, &cat_len, &body_len) != 0;
+    if (rc != 0) {
+        _free_fs_node(fs_tree);
+        return rc;
+    }
+
+    size_t required_parts;
+    rc = _compute_required_part_count(fs_tree, real_opts->max_part_len, cat_len, &required_parts);
 
     unsigned char pack_header[PACKAGE_HEADER_LEN];
     memset(pack_header, 0, sizeof(pack_header));
 
     // initial header population
+    // magic
     memcpy(offset_ptr(pack_header, PACKAGE_MAGIC_OFF), FORMAT_MAGIC, PACKAGE_MAGIC_LEN);
+    // version
     uint16_t version = CURRENT_MAJOR_VERSION;
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_VERSION_OFF), &version, PACKAGE_VERSION_LEN);
+    // compression
     if (real_opts->compression_type != NULL) {
         memcpy(offset_ptr(pack_header, PACKAGE_COMPRESSION_OFF), real_opts->compression_type, PACKAGE_COMPRESSION_LEN);
     }
+    // namespace
     memcpy(offset_ptr(pack_header, PACKAGE_NAMESPACE_OFF), real_opts->pack_namespace, PACKAGE_NAMESPACE_LEN);
 
     free(media_types);
