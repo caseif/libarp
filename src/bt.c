@@ -47,7 +47,3 @@ bt_node_t *bt_find(const bt_node_t *root, const void *needle, int (*cmp_fn)(cons
         return bt_find(root->r, needle, cmp_fn);
     }
 }
-
-bt_node_t *bt_merge(const bt_node_t *root, int (*cmp_fn)(const void *a, const void *b)) {
-    //TODO
-}

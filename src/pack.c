@@ -49,7 +49,7 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     } else if (namespace_len_s > PACKAGE_NAMESPACE_LEN) {
         libarp_set_error("Namespace length is too long");
         return NULL;
-    } else if (!validate_path_component(pack_namespace, namespace_len_s) != 0) {
+    } else if (validate_path_component(pack_namespace, namespace_len_s) != 0) {
         return NULL;
     }
 

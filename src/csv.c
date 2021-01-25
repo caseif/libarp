@@ -186,7 +186,3 @@ void free_csv(csv_file_t *csv) {
     free(csv->tree);
     free(csv->data);
 }
-
-csv_file_t *merge_csvs(csv_file_t *a, csv_file_t *b) {
-    //TODO
-}
