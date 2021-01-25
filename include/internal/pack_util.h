@@ -40,3 +40,7 @@ typedef struct FsNode {
     uint64_t data_len;
     uint64_t data_off;
 } fs_node_t;
+
+typedef fs_node_t *fs_node_ptr;
+
+typedef fs_node_ptr *fs_node_ptr_arr;
