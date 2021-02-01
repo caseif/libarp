@@ -100,7 +100,6 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
         size_t line_len;
 
         if (line_end == NULL) {
-            line_end = cur + remaining;
             line_len = remaining;
             remaining = 0;
         } else {

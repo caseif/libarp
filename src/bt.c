@@ -16,7 +16,7 @@ bt_node_t *bt_insert(bt_node_t *root, bt_node_t *storage, void *data, int (*cmp_
         storage->data = data;
         storage->l = NULL;
         storage->r = NULL;
-        root->children_count++;
+        storage->children_count++;
         return storage;
     }
 

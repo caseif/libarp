@@ -179,11 +179,14 @@ static void _free_fs_node(fs_node_ptr node) {
     }
 
     if (node->type == FS_NODE_TYPE_DIR) {
-        for (size_t i = 0; i < node->children_count; i++) {
-            fs_node_ptr child = node->children[i];
-            if (child != NULL) {
-                _free_fs_node(child);
+        if (node->children != NULL) {
+            for (size_t i = 0; i < node->children_count; i++) {
+                fs_node_ptr child = node->children[i];
+                if (child != NULL) {
+                    _free_fs_node(child);
+                }
             }
+            free(node->children);
         }
     }
 
@@ -193,7 +196,7 @@ static void _free_fs_node(fs_node_ptr node) {
 // annoyingly, the FS APIs are so different between Win32 and POSIX that we need
 // totally separate implementations
 #ifdef _WIN32
-static fs_node_ptr _create_fs_tree(const char *root_path) {
+static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res) {
     WIN32_FIND_DATAA find_data;
 
     HANDLE find_handle = FindFirstFileW(root_path, &find_data);
@@ -265,7 +268,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             }
         }
 
-        if ((node->children = malloc(sizeof(void*) * node->children_count)) == NULL) {
+        if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
             free(child_full_path);
             _free_fs_node(node);
 
@@ -274,7 +277,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         }
 
         size_t child_index = 0;
-        while ((de = readdir(root)) != NULL) {
+        while ((de = readdir(root)) != NULL && child_index < node->children_count) {
             if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                 continue;
             }
@@ -290,6 +293,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
                 int rc = _create_fs_tree(child_full_path, media_types, &child_node);
                 if (rc != 0) {
                     free(child_full_path);
+                    _free_fs_node(node);
 
                     *res = NULL;
                     return rc;
@@ -302,25 +306,25 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             child_index++;
         }
 
+        // just in case
+        node->children_count = child_index;
+
         free(child_full_path);
 
         closedir(root);
     } else if (S_ISREG(root_stat.st_mode) || S_ISLNK(root_stat.st_mode)) {
-        fs_node_ptr child_node;
-
-        if ((child_node = malloc(sizeof(fs_node_t))) == NULL) {
-            _free_fs_node(node);
-
-            libarp_set_error("malloc failed");
-            return ENOMEM;
-        }
-
-        child_node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
+        node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
     } else {
         free(node);
         
         *res = NULL;
-        return 0;
+
+        if (recursion_count == 0) {
+            libarp_set_error("Root fs node type is not valid (must be regular file, directory, or link)");
+            return -1;
+        } else {
+            return 0;
+        }
     }
     
     #ifdef _WIN32
@@ -502,6 +506,8 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
     size_t dir_off = 0;
     size_t file_off = dir_count;
     if ((rc = _flatten_dir(root, node_arr, &dir_off, &file_off)) != 0) {
+        free(node_arr);
+
         return rc;
     }
 
@@ -575,6 +581,11 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
         *node_count += 1;
 
         for (size_t i = 0; i < fs_root->children_count; i++) {
+            fs_node_ptr child = fs_root->children[i];
+            if (child == NULL) {
+                continue;
+            }
+
             int rc = _compute_important_sizes(fs_root->children[i], max_part_len, cat_len, node_count,
                     part_count, body_lens);
             if (rc != 0) {
@@ -589,7 +600,8 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
     return 0;
 }
 
-int write_package_contents_to_disk(fs_node_ptr_arr fs_flat, size_t body_off, size_t max_part_len, size_t *cur_part) {
+int write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *target_dir, size_t body_off,
+        size_t max_part_len, size_t *cur_part) {
     //TODO
     return 0;
 }
@@ -599,9 +611,10 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
 
     csv_file_t *media_types = _load_media_types(real_opts);
 
-    fs_node_ptr fs_tree;
-    int rc = _create_fs_tree(src_path, media_types, &fs_tree);
-    if (rc != 0) {
+    fs_node_ptr fs_tree = NULL;
+    int rc;
+    if ((rc = _create_fs_tree(src_path, media_types, &fs_tree)) != 0) {
+        _free_fs_node(fs_tree);
         return rc;
     }
 
@@ -610,15 +623,17 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
     size_t part_count = 0;
     size_t body_lens[PACKAGE_MAX_PARTS];
     memset(body_lens, 0, sizeof(body_lens));
-    rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &cat_len, &node_count, &part_count, &body_lens);
-    if (rc != 0) {
+    if ((rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &cat_len, &node_count, &part_count, &body_lens)) != 0) {
         _free_fs_node(fs_tree);
         return rc;
     }
 
     fs_node_ptr_arr fs_flat;
     size_t fs_node_count;
-    _flatten_fs(fs_tree, &fs_flat, &fs_node_count);
+    if ((rc = _flatten_fs(fs_tree, &fs_flat, &fs_node_count)) != 0) {
+        _free_fs_node(fs_tree);
+        return rc;
+    }
 
     unsigned char pack_header[PACKAGE_HEADER_LEN];
     memset(pack_header, 0, sizeof(pack_header));
@@ -651,6 +666,7 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
     // body size
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &body_lens[0], PACKAGE_BODY_LEN_LEN);
 
+    free(fs_flat);
     free(media_types);
 
     return 0;

@@ -207,13 +207,15 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     if (stem_len_b > sizeof(PACKAGE_PART_1_SUFFIX) - 1
             && memcmp(file_base + suffix_index, PACKAGE_PART_1_SUFFIX, sizeof(PACKAGE_PART_1_SUFFIX) - 1) == 0) {
         stem_len_b -= sizeof(PACKAGE_PART_1_SUFFIX);
-        if ((file_stem = realloc(file_stem, stem_len_b)) == NULL) {
+        char *file_stem_new;
+        if ((file_stem_new = realloc(file_stem, stem_len_b)) == NULL) {
             free(parent_dir);
             free(file_stem);
 
             libarp_set_error("realloc failed");
             return -1;
         }
+        file_stem = file_stem_new;
     }
 
     if ((pack->part_paths[0] = malloc(file_base_len_s + 1)) == NULL) {
@@ -535,7 +537,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         unload_package(pack);
         fclose(package_file);
 
-        return -1;
+        return rc;
     }
 
     void *pack_data_view;
@@ -581,18 +583,25 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
 
     memcpy(pack_header, data, PACKAGE_HEADER_LEN);
 
-    argus_package_t *pack = calloc(1, sizeof(argus_package_t));
+    argus_package_t *pack;
+    if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
+        return ENOMEM;
+    }
 
     int rc;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
+        unload_package(pack);
         return rc;
     }
 
     if ((rc = _validate_package_header(pack, package_len)) != 0) {
+        unload_package(pack);
         return rc;
     }
 
     if (pack->total_parts > 1) {
+        unload_package(pack);
+
         libarp_set_error("Memory-resident packages may not contain more than 1 part");
         return -1;
     }
@@ -700,7 +709,6 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     }
 
     path_tail += cursor + 1;
-    cursor = 0;
 
     // start at root
     node_desc_t *cur_node = real_pack->all_nodes[0];
@@ -721,7 +729,6 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         cur_node = (node_desc_t*) found->data;
 
         path_tail += cursor + 1;
-        cursor = 0;
     }
 
     // should be at terminal component now
@@ -821,7 +828,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
             }
 
             void *inflated_data;
-            if ((inflated_data = malloc(cur_node->data_uc_len))) {
+            if ((inflated_data = malloc(cur_node->data_uc_len)) == NULL) {
                 free(raw_data);
 
                 libarp_set_error("malloc failed");
@@ -884,6 +891,8 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
             free(raw_data);
 
             if (rc != Z_STREAM_END) {
+                free(inflated_data);
+
                 libarp_set_error("DEFLATE stream is incomplete");
                 return NULL;
             }
@@ -901,7 +910,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
     arp_resource_t *res;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
-        free(raw_data);
+        free(final_data);
 
         libarp_set_error("malloc failed");
         return NULL;
