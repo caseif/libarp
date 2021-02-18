@@ -19,7 +19,7 @@
 #include <signal.h>
 #endif
 
-char err_msg[256];
+char err_msg[ERR_MSG_MAX_LEN];
 
 const char *libarp_get_error(void) {
     return err_msg;

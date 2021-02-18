@@ -11,6 +11,8 @@
 
 #include <stddef.h>
 
+#define ERR_MSG_MAX_LEN 4096
+
 typedef void *ArgusPackage;
 
 typedef struct ArpResource {

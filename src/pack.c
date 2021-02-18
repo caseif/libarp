@@ -10,6 +10,7 @@
 #include "libarp/common.h"
 #include "libarp/pack.h"
 #include "internal/common_util.h"
+#include "internal/crc32c.h"
 #include "internal/csv.h"
 #include "internal/file_defines.h"
 #include "internal/other_defines.h"
@@ -24,12 +25,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #ifndef _WIN32
 #include <libgen.h>
 #endif
 
 #define CURRENT_MAJOR_VERSION 1
+
+#define COPY_BUFFER_LEN (128 * 1024) // 128 KB
+#define DIR_LIST_BUFFER_LEN 1024 // 4 KB
 
 ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, size_t max_part_len,
         const char *compression_type, const char *media_types_path) {
@@ -114,7 +119,7 @@ static csv_file_t *_load_media_types(arp_packing_options_t *opts) {
     size_t user_csv_len = 0;
 
     if (opts->media_types_path != NULL) {
-        FILE *user_file = fopen(opts->media_types_path, "r");
+        FILE *user_file = fopen(opts->media_types_path, "rb");
         if (user_file == NULL) {
             libarp_set_error("Failed to open user media types file");
             return NULL;
@@ -316,7 +321,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
     } else {
         free(node);
-        
+
         *res = NULL;
 
         if (recursion_count == 0) {
@@ -326,21 +331,21 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             return 0;
         }
     }
-    
+
     #ifdef _WIN32
     char win32_path_buffer[MAX_PATH + 1];
     size_t win32_path_len = GetFullPathNameW(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
 
     if (win32_path_len == 0 || win32_path_len > MAX_PATH + 1) {
         _free_fs_node(node);
-        
+
         libarp_set_error("Failed to get full file path");
         return -1;
     }
 
     if ((node->target_path = malloc(win32_path_len)) == NULL) {
         _free_fs_node(node);
-        
+
         libarp_set_error("malloc failed");
         return ENOMEM;
     }
@@ -358,7 +363,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         libarp_set_error("strdup failed");
         return ENOMEM;
     }
-    
+
     char *file_name;
     #ifdef _WIN32
     file_name = path_copy;
@@ -408,7 +413,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     }
 
     memcpy(node->file_stem, file_name, stem_len_s);
-    
+
     if (ext_len_s > 0) {
         if ((node->file_ext = malloc(ext_len_s + 1)) == NULL) {
             free(path_copy);
@@ -428,7 +433,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         if (media_type == NULL || strlen(media_type) == 0 || strlen(media_type) > NODE_MT_MAX_LEN) {
             media_type = DEFAULT_MEDIA_TYPE;
         }
-        
+
         if ((node->media_type = malloc(strlen(media_type) + 1)) == NULL) {
             _free_fs_node(node);
 
@@ -453,13 +458,13 @@ static size_t _fs_node_count(fs_node_ptr root, bool dirs_only) {
     }
 
     if (root->type == FS_NODE_TYPE_DIR) {
-        size_t count = 0;
+        size_t count = 1;
 
         for (size_t i = 0; i < root->children_count; i++) {
             count += _fs_node_count(root->children[i], dirs_only);
         }
 
-        return count + 1;
+        return count;
     } else {
         if (dirs_only) {
             return 0;
@@ -477,15 +482,18 @@ static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_
         return 0;
     }
 
+    // we have two separate offsets because the directories are listed first in a single block
     if (root->type == FS_NODE_TYPE_DIR) {
         root->index = *dir_off;
-        node_arr[*dir_off++] = root;
+        node_arr[*dir_off] = root;
+        *dir_off += 1;
         for (size_t i = 0; i < root->children_count; i++) {
             _flatten_dir(root->children[i], node_arr, dir_off, file_off);
         }
     } else {
         root->index = *file_off;
-        node_arr[*file_off++] = root;
+        node_arr[*file_off] = root;
+        *file_off += 1;
     }
 
     return 0;
@@ -511,6 +519,10 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
         return rc;
     }
 
+    //TODO: scan-build says that not every element in `flattened` is guaranteed
+    //      to be initialized. I think this is a false positive, but I'm not 100
+    //      percent certain.
+
     *node_count = total_count;
     *flattened = node_arr;
 
@@ -518,13 +530,11 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
 }
 
 // forward declaration required for recursive calls
-static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, size_t *cat_len,
-        size_t *node_count, size_t *part_count, size_t (*body_lens)[PACKAGE_MAX_PARTS]);
+static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes);
 
-static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, size_t *cat_len,
-        size_t *node_count, size_t *part_count, size_t (*body_lens)[PACKAGE_MAX_PARTS]) {
-    if (*part_count == 0) {
-        *part_count = 1;
+static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes) {
+    if (sizes->part_count == 0) {
+        sizes->part_count = 1;
     }
 
     size_t stem_len_s = strlen(fs_root->file_stem);
@@ -541,44 +551,42 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
             media_type_len_s = sizeof(DEFAULT_MEDIA_TYPE) - 1;
         }
 
-        *cat_len += NODE_DESC_BASE_LEN + stem_len_s + ext_len_s + media_type_len_s;
+        sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s + ext_len_s + media_type_len_s;
 
         stat_t node_stat;
         if (stat(fs_root->target_path, &node_stat) != 0) {
             libarp_set_error("stat failed");
             return -1;
         }
-        
-        size_t new_len = *body_lens[*part_count - 1] + node_stat.st_size;
+
+        size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_stat.st_size;
         if (new_len > max_part_len) {
-            if (*part_count == PACKAGE_MAX_PARTS) {
+            if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
                 return -1;
             }
 
-            *part_count += 1;
+            sizes->part_count += 1;
         }
 
-        *body_lens[*part_count - 1] += node_stat.st_size;
+        sizes->body_lens[sizes->part_count - 1] += node_stat.st_size;
 
-        *node_count += 1;
+        sizes->node_count += 1;
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
-        *cat_len += NODE_DESC_BASE_LEN + stem_len_s;
-        
+        sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s;
+
         size_t node_len = fs_root->children_count * NODE_DESCRIPTOR_INDEX_LEN;
-        size_t new_len = *body_lens[*part_count - 1] + node_len;
+        size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_len;
 
         if (new_len > max_part_len) {
-            if (*part_count == PACKAGE_MAX_PARTS) {
+            if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
                 return -1;
             }
-
-            *part_count += 1;
         }
 
-        *body_lens[*part_count - 1] += node_len;
-        *node_count += 1;
+        sizes->body_lens[sizes->part_count - 1] += node_len;
+        sizes->node_count += 1;
 
         for (size_t i = 0; i < fs_root->children_count; i++) {
             fs_node_ptr child = fs_root->children[i];
@@ -586,8 +594,7 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
                 continue;
             }
 
-            int rc = _compute_important_sizes(fs_root->children[i], max_part_len, cat_len, node_count,
-                    part_count, body_lens);
+            int rc = _compute_important_sizes(fs_root->children[i], max_part_len, sizes);
             if (rc != 0) {
                 return rc;
             }
@@ -600,16 +607,346 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
     return 0;
 }
 
-int write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *target_dir, size_t body_off,
-        size_t max_part_len, size_t *cur_part) {
-    //TODO
+static int _unlink_part_files(const char *target_dir, const char *pack_name, size_t count) {
+    uint16_t cur_index = 1;
+    char cur_path[PATH_MAX];
+
+    for (size_t i = 1; i <= count; i++) {
+        sprintf(cur_path, "%s%s%s.%03d.arp", target_dir, PATH_SEPARATOR, pack_name,
+                cur_index);
+        unlink(cur_path);
+    }
+
     return 0;
 }
 
-int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts) {
+static int _write_package_contents_to_disk(const unsigned char *header_contents, fs_node_ptr_arr fs_flat,
+        const char *target_dir, arp_packing_options_t *opts, package_important_sizes_t *important_sizes) {
+    FILE *cur_part_file;
+    char cur_part_path[PATH_MAX];
+    
+    char first_part_path[PATH_MAX];
+
+    const char *first_file_suffix = important_sizes->part_count > 1 ? PACKAGE_PART_1_SUFFIX : "";
+    sprintf(first_part_path, "%s%s%s%s.arp", target_dir, PATH_SEPARATOR, opts->pack_name, first_file_suffix);
+
+    if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
+        libarp_set_error("Failed to open first part file on disk");
+        return -1;
+    }
+
+    // write package header
+    if (fwrite(header_contents, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
+        fclose(cur_part_file);
+        unlink(cur_part_path);
+
+        libarp_set_error("Failed to write package header to disk");
+        return -1;
+    }
+
+    size_t cat_off = PACKAGE_HEADER_LEN;
+    size_t body_start = cat_off + important_sizes->cat_len;
+    size_t body_off = body_start;
+
+    uint16_t cur_part_index = 1;
+
+    unsigned char copy_buffer[COPY_BUFFER_LEN];
+
+    // write node contents
+    for (size_t i = 0; i < important_sizes->node_count; i++) {
+        fs_node_ptr node = fs_flat[i];
+
+        size_t new_part_len = body_off + node->size;
+        if (new_part_len > opts->max_part_len) {
+            fclose(cur_part_file);
+
+            cur_part_index += 1;
+
+            sprintf(cur_part_path, "%s%s%s.part%03d.arp", target_dir, PATH_SEPARATOR, opts->pack_name, cur_part_index);
+
+            if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index - 1);
+
+                libarp_set_error("Failed to open part file for writing on disk");
+                return -1;
+            }
+
+            // write part header
+            unsigned char part_header[PACKAGE_PART_HEADER_LEN];
+
+            memset(part_header, 0, sizeof(part_header));
+            memcpy(part_header, PART_MAGIC, PART_MAGIC_LEN);
+            copy_int_as_le(offset_ptr(part_header, PART_INDEX_OFF), &cur_part_index, sizeof(cur_part_index));
+
+            if (fwrite(part_header, sizeof(part_header), 1, cur_part_file) != 1) {
+                fclose(cur_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                libarp_set_error("Failed to write part header to disk");
+                return -1;
+            }
+
+            body_off = sizeof(part_header);
+        }
+
+        node->data_off = cur_part_index == 1 ? (body_off - body_start) : (body_off - PACKAGE_PART_HEADER_LEN);
+        node->part = cur_part_index;
+        
+        char err_msg[ERR_MSG_MAX_LEN];
+
+        if (node->type == FS_NODE_TYPE_DIR) {
+            uint32_t dir_listing_buffer[DIR_LIST_BUFFER_LEN];
+            size_t cur_child_index;
+            size_t dir_list_index = 0;
+
+            uint32_t crc = 0;
+            bool began_crc = false;
+
+            if (node->children_count == 0) {
+                node->data_len = 0;
+                node->crc = ~0;
+            }
+
+            size_t dir_data_len = 0;
+
+            for (size_t i = 0; i < node->children_count; i++) {
+                dir_listing_buffer[dir_list_index] = node->children[cur_child_index]->index;
+                dir_list_index += 1;
+                cur_child_index += 1;
+
+                if (dir_list_index == DIR_LIST_BUFFER_LEN) {
+                    if (fwrite(dir_listing_buffer, sizeof(dir_listing_buffer), 1, cur_part_file) == 0) {
+                        fclose(cur_part_file);
+                        _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                        libarp_set_error("Failed to write directory contents to part file on disk");
+                        return -1;
+                    }
+
+                    if (began_crc) {
+                        crc = crc32c_cont(crc, dir_listing_buffer, sizeof(dir_listing_buffer));
+                    } else {
+                        crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
+                        began_crc = true;
+                    }
+                    //TODO: handle compression
+                    
+                    dir_list_index = 0;
+                    body_off += sizeof(dir_listing_buffer);
+                    dir_data_len += sizeof(dir_listing_buffer);
+                }
+            }
+
+            if (dir_list_index != 0) {
+                size_t write_bytes = dir_list_index * sizeof(dir_listing_buffer[0]);
+                if (fwrite(dir_listing_buffer, write_bytes, 1, cur_part_file) == 0) {
+                    fclose(cur_part_file);
+                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                    libarp_set_error("Failed to write directory contents to part file on disk");
+                    return -1;
+                }
+
+                if (began_crc) {
+                    crc = crc32c_cont(crc, dir_listing_buffer, sizeof(dir_listing_buffer));
+                } else {
+                    crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
+                }
+                //TODO: handle compression
+
+                body_off += write_bytes;
+                dir_data_len += write_bytes;
+            }
+
+            node->data_len = dir_data_len;
+            node->crc = crc;
+        } else if (node->type == FS_NODE_TYPE_FILE || node->type == FS_NODE_TYPE_LINK) {
+            stat_t node_stat;
+            if (stat(node->target_path, &node_stat) != 0) {
+                fclose(cur_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat node at path %s", node->target_path);
+                libarp_set_error(err_msg);
+                return -1;
+            }
+
+            size_t cur_node_size = node_stat.st_size;
+
+            if (cur_node_size != node->size) {
+                fclose(cur_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Node changed sizes at path %s", node->target_path);
+                libarp_set_error(err_msg);
+                return -1;
+            }
+
+            FILE *cur_node_file;
+            if ((cur_node_file = fopen(node->target_path, "rb")) != 0) {
+                fclose(cur_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to read node at path %s", node->target_path);
+                libarp_set_error(err_msg);
+                return -1;
+            }
+
+            uint32_t crc = ~0;
+            bool began_crc = false;
+
+            size_t data_len = 0;
+
+            size_t read_bytes;
+            while ((read_bytes = fread(copy_buffer, 1, COPY_BUFFER_LEN, cur_node_file)) > 0) {
+                if (fwrite(copy_buffer, read_bytes, 1, cur_part_file) != 1) {
+                    fclose(cur_part_file);
+                    fclose(cur_node_file);
+                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                    libarp_set_error("Failed to copy node data to part file on disk");
+                    return -1;
+                }
+
+                if (began_crc) {
+                    crc = crc32c_cont(crc, copy_buffer, read_bytes);
+                } else {
+                    crc = crc32c(copy_buffer, read_bytes);
+                }
+                //TODO: handle compression
+
+                body_off += read_bytes;
+                data_len += read_bytes;
+            }
+
+            fclose(cur_node_file);
+
+            if (ferror(cur_node_file)) {
+                fclose(cur_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Encountered error while reading node at path %s", node->target_path);
+                libarp_set_error(err_msg);
+                return -1;
+            }
+
+            node->crc = crc;
+            node->data_len = data_len; //TODO: account for compression
+        } else {
+            node->data_off = body_off;
+            node->data_len = 0;
+            // just skip it
+            continue;
+        }
+    }
+
+    FILE *first_part_file;
+    if (cur_part_index == 1) {
+        first_part_file = cur_part_file;
+    } else {
+        fclose(cur_part_file);
+
+        if ((first_part_file = fopen(first_part_path, "wb")) == NULL) {
+            _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+            libarp_set_error("Failed to open first part file on disk");
+            return -1;
+        }
+    }
+
+    unsigned char cat_buf[COPY_BUFFER_LEN];
+    size_t cat_buf_off = 0;
+    for (size_t i = 0; i < important_sizes->node_count; i++) {
+        if (cat_buf_off + NODE_DESC_MAX_LEN > COPY_BUFFER_LEN) {
+            if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
+                fclose(first_part_file);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+                libarp_set_error("Failed to write catalogue to disk");
+                return -1;
+            }
+
+            cat_buf_off = 0;
+        }
+
+        fs_node_ptr node = fs_flat[i];
+
+        size_t name_len_s = strlen(node->file_stem);
+        size_t ext_len_s = 0;
+        size_t mt_len_s = 0;
+        if (node->type != FS_NODE_TYPE_DIR) {
+            ext_len_s = node->file_ext != NULL ? strlen(node->file_ext) : 0;
+            mt_len_s = strlen(node->media_type);
+        }
+
+        unsigned char cur_node_buf[NODE_DESC_MAX_LEN];
+        memset(cur_node_buf, 0, sizeof(cur_node_buf));
+
+        memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &node->type, NODE_DESC_TYPE_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PART_OFF), &node->part, NODE_DESC_PART_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_OFF_OFF), &node->data_off, NODE_DESC_DATA_OFF_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_LEN_OFF), &node->data_len, NODE_DESC_DATA_LEN_LEN);
+        if (opts->compression_type != NULL) {
+            //TODO: implement compression
+            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UC_DATA_LEN_OFF), &node->size, NODE_DESC_UC_DATA_LEN_LEN);
+        }
+        memcpy(offset_ptr(cur_node_buf, NODE_DESC_CRC_OFF), &node->crc, NODE_DESC_CRC_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_NAME_LEN_OFF), &name_len_s,
+                NODE_DESC_NAME_LEN_LEN);
+        if (node->type != FS_NODE_TYPE_DIR) {
+            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_EXT_LEN_OFF), &ext_len_s,
+                    NODE_DESC_EXT_LEN_LEN);
+            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_MT_LEN_OFF), &mt_len_s,
+                    NODE_DESC_MT_LEN_LEN);
+        }
+
+        size_t desc_len = NODE_DESC_BASE_LEN;
+
+        memcpy(offset_ptr(cur_node_buf, desc_len), node->file_stem, name_len_s);
+        desc_len += name_len_s;
+
+        if (node->type != FS_NODE_TYPE_DIR) {
+            memcpy(offset_ptr(cur_node_buf, desc_len), node->file_ext, ext_len_s);
+            desc_len += ext_len_s;
+
+            memcpy(offset_ptr(cur_node_buf, desc_len), node->media_type, mt_len_s);
+            desc_len += mt_len_s;
+        }
+
+        // write descriptor length
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_LEN_OFF), &desc_len, NODE_DESC_LEN_LEN);
+
+        memcpy(offset_ptr(cat_buf, cat_buf_off), cur_node_buf, desc_len);
+    }
+
+    if (cat_buf_off != 0) {
+        if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
+            fclose(first_part_file);
+            _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+
+            libarp_set_error("Failed to write catalogue to disk");
+            return -1;
+        }
+    }
+
+    fclose(first_part_file);
+
+    return 0;
+}
+
+static void _emit_message(void (*callback)(const char*), const char *msg) {
+    if (callback != NULL) {
+        callback(msg);
+    }
+}
+
+int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts,
+        void (*msg_callback)(const char*)) {
     arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
 
     csv_file_t *media_types = _load_media_types(real_opts);
+
+    _emit_message(msg_callback, "Reading filesystem contents");
 
     fs_node_ptr fs_tree = NULL;
     int rc;
@@ -618,15 +955,16 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
         return rc;
     }
 
-    size_t cat_len = 0;
-    size_t node_count = 0;
-    size_t part_count = 0;
-    size_t body_lens[PACKAGE_MAX_PARTS];
-    memset(body_lens, 0, sizeof(body_lens));
-    if ((rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &cat_len, &node_count, &part_count, &body_lens)) != 0) {
+    _emit_message(msg_callback, "Computing package parameters");
+
+    package_important_sizes_t important_sizes;
+    memset(&important_sizes, 0, sizeof(important_sizes));
+    if ((rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &important_sizes)) != 0) {
         _free_fs_node(fs_tree);
         return rc;
     }
+
+    _emit_message(msg_callback, "Flattening filesystem map");
 
     fs_node_ptr_arr fs_flat;
     size_t fs_node_count;
@@ -635,11 +973,13 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
         return rc;
     }
 
+    _emit_message(msg_callback, "Generating package header");
+
     unsigned char pack_header[PACKAGE_HEADER_LEN];
     memset(pack_header, 0, sizeof(pack_header));
 
     size_t cat_off = PACKAGE_HEADER_LEN;
-    size_t body_off = cat_off + cat_len;
+    size_t body_off = cat_off + important_sizes.cat_len;
 
     // header population
     // magic number
@@ -649,22 +989,31 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_VERSION_OFF), &version, PACKAGE_VERSION_LEN);
     // compression
     if (real_opts->compression_type != NULL) {
-        memcpy(offset_ptr(pack_header, PACKAGE_COMPRESSION_OFF), real_opts->compression_type, PACKAGE_COMPRESSION_LEN);
+        //TODO: implement compression
+        //memcpy(offset_ptr(pack_header, PACKAGE_COMPRESSION_OFF), real_opts->compression_type, PACKAGE_COMPRESSION_LEN);
     }
     // namespace
     memcpy(offset_ptr(pack_header, PACKAGE_NAMESPACE_OFF), real_opts->pack_namespace, PACKAGE_NAMESPACE_LEN);
     // parts
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_PARTS_OFF), &part_count, PACKAGE_PARTS_LEN);
+    copy_int_as_le(offset_ptr(pack_header, PACKAGE_PARTS_OFF), &important_sizes.part_count, PACKAGE_PARTS_LEN);
     // catalogue offset
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_OFF_OFF), &cat_off, PACKAGE_CAT_OFF_LEN);
     // catalogue size
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_LEN_OFF), &cat_len, PACKAGE_CAT_LEN_LEN);
+    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_LEN_OFF), &important_sizes.cat_len, PACKAGE_CAT_LEN_LEN);
     // node count
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_CNT_OFF), &node_count, PACKAGE_CAT_CNT_LEN);
+    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_CNT_OFF), &important_sizes.node_count, PACKAGE_CAT_CNT_LEN);
     // body offset
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_OFF_OFF), &body_off, PACKAGE_BODY_OFF_LEN);
     // body size
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &body_lens[0], PACKAGE_BODY_LEN_LEN);
+    copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &important_sizes.body_lens[0], PACKAGE_BODY_LEN_LEN);
+    // unused 1
+    memset(offset_ptr(pack_header, PACKAGE_UNUSED_1_LEN), 0, PACKAGE_UNUSED_1_LEN);
+    // unused 2
+    memset(offset_ptr(pack_header, PACKAGE_UNUSED_2_LEN), 0, PACKAGE_UNUSED_2_LEN);
+
+    _emit_message(msg_callback, "Writing package contents");
+
+    _write_package_contents_to_disk(pack_header, fs_flat, target_dir, real_opts, &important_sizes);
 
     free(fs_flat);
     free(media_types);

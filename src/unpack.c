@@ -87,7 +87,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
 static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
-        libarp_set_error("Package compression is not supported");
+        libarp_set_error("Package compression type is not supported");
         return -1;
     }
 

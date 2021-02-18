@@ -20,4 +20,5 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
 
 void release_packing_options(ArpPackingOptions opts);
 
-int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts);
+int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts,
+        void (*msg_callback)(const char*));

@@ -39,8 +39,16 @@ typedef struct FsNode {
     uint16_t part;
     uint64_t data_len;
     uint64_t data_off;
+    uint32_t crc;
 } fs_node_t;
 
 typedef fs_node_t *fs_node_ptr;
 
 typedef fs_node_ptr *fs_node_ptr_arr;
+
+typedef struct PackageImportantSizes {
+    size_t cat_len;
+    size_t node_count;
+    size_t part_count;
+    size_t body_lens[PACKAGE_MAX_PARTS];
+} package_important_sizes_t;

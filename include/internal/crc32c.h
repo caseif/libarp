@@ -13,3 +13,5 @@
 #include <stdint.h>
 
 uint32_t crc32c(const void *data, size_t len);
+
+uint32_t crc32c_cont(uint32_t initial, const void *data, size_t len);
