@@ -12,7 +12,7 @@ option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
 option(LIBARP_FEATURE_DEFLATE "Compile with support for DEFLATE compression" ON)
 
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+if("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(SEND_ERROR "In-source builds are not allowed.")
 endif()
 
@@ -38,7 +38,7 @@ set(TMP_INCLUDE_DIR "${CMAKE_BINARY_DIR}/include.tmp")
 
 set(EXT_LIBS "")
 
-set(ZLIB_SOURCE_DIR "${CMAKE_SOURCE_DIR}/libs/zlib")
+set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
 configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
 set(ZLIB_LIBRARY "zlib")
 set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -53,9 +53,9 @@ endif()
 add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
 
-set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
-set(INC_DIR "${CMAKE_SOURCE_DIR}/include")
-set(TOOLING_DIR "${CMAKE_SOURCE_DIR}/tooling")
+set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
+set(INC_DIR "${PROJECT_SOURCE_DIR}/include")
+set(TOOLING_DIR "${PROJECT_SOURCE_DIR}/tooling")
 
 set(GENERATED_SRC_DIR "${SRC_DIR}/generated")
 set(GENERATED_INC_DIR "${INC_DIR}/internal/generated")
@@ -77,7 +77,7 @@ execute_process(COMMAND "ruby" "${TOOLING_DIR}/bin2c/bin2c.rb"
       "${TOOLING_DIR}/output/media_types.csv"
       "-h ${GENERATED_INC_DIR}/"
       "-c ${GENERATED_SRC_DIR}/"
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     RESULT_VARIABLE CMD_RES)
 if(CMD_RES)
   message(FATAL_ERROR "    bin2c.rb: ${CMD_RES}")
