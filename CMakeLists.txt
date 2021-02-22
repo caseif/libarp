@@ -102,7 +102,7 @@ add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
     make_directory ${HDR_OUT_DIR})
 add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E
-    copy_directory "${INC_DIR}/${CMAKE_PROJECT_NAME}/" "${HDR_OUT_DIR}/${CMAKE_PROJECT_NAME}/")
+    copy_directory "${INC_DIR}/${PROJECT_NAME}/" "${HDR_OUT_DIR}/${PROJECT_NAME}/")
 
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
 
