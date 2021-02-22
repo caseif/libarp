@@ -12,7 +12,7 @@ option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
 option(LIBARP_FEATURE_DEFLATE "Compile with support for DEFLATE compression" ON)
 
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-if("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+if("${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
   message(SEND_ERROR "In-source builds are not allowed.")
 endif()
 
@@ -34,7 +34,7 @@ elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
 endif()
 
 # include dir for generated headers which must be copied (configs)
-set(TMP_INCLUDE_DIR "${CMAKE_BINARY_DIR}/include.tmp")
+set(TMP_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include.tmp")
 
 set(EXT_LIBS "")
 
@@ -87,7 +87,7 @@ endif()
 file(GLOB_RECURSE C_FILES ${SRC_DIR}/*.c)
 file(GLOB_RECURSE H_FILES ${SRC_DIR}/*.h)
 
-set(DIST_DIR "${CMAKE_BINARY_DIR}/dist")
+set(DIST_DIR "${PROJECT_BINARY_DIR}/dist")
 
 set(LIB_OUT_DIR "${DIST_DIR}/lib")
 
