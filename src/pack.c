@@ -607,15 +607,34 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
     return 0;
 }
 
-static int _unlink_part_files(const char *target_dir, const char *pack_name, size_t count) {
-    uint16_t cur_index = 1;
-    char cur_path[PATH_MAX];
+static char *_get_part_path(const char *target_dir, const char *pack_name, uint16_t index, bool skip_suffix, char *buf) {
+    if (buf == NULL) {
+        buf = malloc(strlen(target_dir) + strlen(PATH_SEPARATOR) + strlen(pack_name) + 13);
+    }
+
+    if (skip_suffix && index != 1) {
+        libarp_set_error("Suffix cannot be skipped for part with index > 1");
+        return NULL;
+    }
+
+    if (skip_suffix) {
+        sprintf(buf, "%s%s%s.arp", target_dir, PATH_SEPARATOR, pack_name);
+    } else {
+        sprintf(buf, "%s%s%s.part%03d.arp", target_dir, PATH_SEPARATOR, pack_name, index);
+    }
+
+    return buf;
+}
+
+static int _unlink_part_files(const char *target_dir, const char *pack_name, size_t count, bool skip_suffix) {
+    char *cur_path = NULL;
 
     for (size_t i = 1; i <= count; i++) {
-        sprintf(cur_path, "%s%s%s.%03d.arp", target_dir, PATH_SEPARATOR, pack_name,
-                cur_index);
+        cur_path = _get_part_path(target_dir, pack_name, i, skip_suffix, cur_path);
         unlink(cur_path);
     }
+
+    free(cur_path);
 
     return 0;
 }
@@ -623,12 +642,10 @@ static int _unlink_part_files(const char *target_dir, const char *pack_name, siz
 static int _write_package_contents_to_disk(const unsigned char *header_contents, fs_node_ptr_arr fs_flat,
         const char *target_dir, arp_packing_options_t *opts, package_important_sizes_t *important_sizes) {
     FILE *cur_part_file;
-    char cur_part_path[PATH_MAX];
-    
-    char first_part_path[PATH_MAX];
+    char *cur_part_path = NULL;
 
-    const char *first_file_suffix = important_sizes->part_count > 1 ? PACKAGE_PART_1_SUFFIX : "";
-    sprintf(first_part_path, "%s%s%s%s.arp", target_dir, PATH_SEPARATOR, opts->pack_name, first_file_suffix);
+    bool skip_part_suffix = important_sizes->part_count == 1;
+    _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
     if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
         libarp_set_error("Failed to open first part file on disk");
@@ -662,10 +679,10 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             cur_part_index += 1;
 
-            sprintf(cur_part_path, "%s%s%s.part%03d.arp", target_dir, PATH_SEPARATOR, opts->pack_name, cur_part_index);
+            cur_part_path = _get_part_path(target_dir, opts->pack_name, cur_part_index, false, cur_part_path);
 
             if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index - 1);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index - 1, false);
 
                 libarp_set_error("Failed to open part file for writing on disk");
                 return -1;
@@ -680,7 +697,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             if (fwrite(part_header, sizeof(part_header), 1, cur_part_file) != 1) {
                 fclose(cur_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, false);
 
                 libarp_set_error("Failed to write part header to disk");
                 return -1;
@@ -696,7 +713,6 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
         if (node->type == FS_NODE_TYPE_DIR) {
             uint32_t dir_listing_buffer[DIR_LIST_BUFFER_LEN];
-            size_t cur_child_index;
             size_t dir_list_index = 0;
 
             uint32_t crc = 0;
@@ -709,15 +725,14 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             size_t dir_data_len = 0;
 
-            for (size_t i = 0; i < node->children_count; i++) {
+            for (size_t cur_child_index = 0; i < node->children_count; i++) {
                 dir_listing_buffer[dir_list_index] = node->children[cur_child_index]->index;
                 dir_list_index += 1;
-                cur_child_index += 1;
 
                 if (dir_list_index == DIR_LIST_BUFFER_LEN) {
                     if (fwrite(dir_listing_buffer, sizeof(dir_listing_buffer), 1, cur_part_file) == 0) {
                         fclose(cur_part_file);
-                        _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                        _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                         libarp_set_error("Failed to write directory contents to part file on disk");
                         return -1;
@@ -741,7 +756,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 size_t write_bytes = dir_list_index * sizeof(dir_listing_buffer[0]);
                 if (fwrite(dir_listing_buffer, write_bytes, 1, cur_part_file) == 0) {
                     fclose(cur_part_file);
-                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                     libarp_set_error("Failed to write directory contents to part file on disk");
                     return -1;
@@ -764,7 +779,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             stat_t node_stat;
             if (stat(node->target_path, &node_stat) != 0) {
                 fclose(cur_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat node at path %s", node->target_path);
                 libarp_set_error(err_msg);
@@ -775,7 +790,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             if (cur_node_size != node->size) {
                 fclose(cur_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Node changed sizes at path %s", node->target_path);
                 libarp_set_error(err_msg);
@@ -785,7 +800,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             FILE *cur_node_file;
             if ((cur_node_file = fopen(node->target_path, "rb")) != 0) {
                 fclose(cur_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to read node at path %s", node->target_path);
                 libarp_set_error(err_msg);
@@ -802,7 +817,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 if (fwrite(copy_buffer, read_bytes, 1, cur_part_file) != 1) {
                     fclose(cur_part_file);
                     fclose(cur_node_file);
-                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                    _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                     libarp_set_error("Failed to copy node data to part file on disk");
                     return -1;
@@ -823,7 +838,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             if (ferror(cur_node_file)) {
                 fclose(cur_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Encountered error while reading node at path %s", node->target_path);
                 libarp_set_error(err_msg);
@@ -846,8 +861,10 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
     } else {
         fclose(cur_part_file);
 
-        if ((first_part_file = fopen(first_part_path, "wb")) == NULL) {
-            _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+        cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
+
+        if ((first_part_file = fopen(cur_part_path, "wb")) == NULL) {
+            _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
             libarp_set_error("Failed to open first part file on disk");
             return -1;
@@ -860,7 +877,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         if (cat_buf_off + NODE_DESC_MAX_LEN > COPY_BUFFER_LEN) {
             if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
                 fclose(first_part_file);
-                _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+                _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 libarp_set_error("Failed to write catalogue to disk");
                 return -1;
@@ -922,7 +939,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
     if (cat_buf_off != 0) {
         if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
             fclose(first_part_file);
-            _unlink_part_files(target_dir, opts->pack_name, cur_part_index);
+            _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
             libarp_set_error("Failed to write catalogue to disk");
             return -1;
