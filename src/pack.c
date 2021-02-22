@@ -645,7 +645,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
     char *cur_part_path = NULL;
 
     bool skip_part_suffix = important_sizes->part_count == 1;
-    _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
+    cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
     if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
         libarp_set_error("Failed to open first part file on disk");
