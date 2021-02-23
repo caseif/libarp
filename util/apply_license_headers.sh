@@ -1,7 +1,7 @@
 #!/bin/bash
 
 PROJECT="libarp"
-YEAR="2020"
+YEAR="2020-2021"
 AUTHOR="Max Roncace"
 EMAIL="mproncace@gmail.com"
 
