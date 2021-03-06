@@ -90,10 +90,9 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x46`| `0x8` | Catalogue Size | The length in bytes of the catalogue section. |
 | `0x4E` | `0x3` | Node Count | The number of node descriptors contained by the catalogue. |
 | `0x51` | `0x3` | Resource Count | The number of resources contained by the catalogue. |
-| `0x54` | `0x1` | Unused | Unused by this version of the specification. |
-| `0x55`| `0x8` | Body Offset | The offset in bytes of the body section of the first part, starting from the beginning of the package header. |
-| `0x5D`| `0x8` | Body Size | The length in bytes of the body section of the first part. |
-| `0x65` | `0x9B` | Reserved | Reserved for future use. |
+| `0x54`| `0x8` | Body Offset | The offset in bytes of the body section of the first part, starting from the beginning of the package header. |
+| `0x5C`| `0x8` | Body Size | The length in bytes of the body section of the first part. |
+| `0x64` | `0x9C` | Reserved | Reserved for future use. |
 
 The package namespace may not contain the characters `/` (forward slash), `\` (back slash), `:` (colon), , nor any
 control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
