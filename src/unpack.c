@@ -78,6 +78,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
     _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, &header_off);
     _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, &header_off);
     _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, &header_off);
+    _copy_int_to_field(&pack->resource_count, header_data, PACKAGE_RES_CNT_LEN, &header_off);
     _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, &header_off);
     _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, &header_off);
 
@@ -103,6 +104,11 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
 
     if (pack->node_count == 0) {
         libarp_set_error("Package catalogue is empty");
+        return -1;
+    }
+
+    if (pack->resource_count == 0) {
+        libarp_set_error("Package does not contain any resources");
         return -1;
     }
 

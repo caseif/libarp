@@ -572,6 +572,7 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
         sizes->body_lens[sizes->part_count - 1] += node_stat.st_size;
 
         sizes->node_count += 1;
+        sizes->resource_count += 1;
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
         sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s;
 
@@ -1019,14 +1020,14 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_LEN_OFF), &important_sizes.cat_len, PACKAGE_CAT_LEN_LEN);
     // node count
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_CNT_OFF), &important_sizes.node_count, PACKAGE_CAT_CNT_LEN);
+    // resource count
+    copy_int_as_le(offset_ptr(pack_header, PACKAGE_RES_CNT_OFF), &important_sizes.resource_count, PACKAGE_RES_CNT_LEN);
     // body offset
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_OFF_OFF), &body_off, PACKAGE_BODY_OFF_LEN);
     // body size
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &important_sizes.body_lens[0], PACKAGE_BODY_LEN_LEN);
     // unused 1
-    memset(offset_ptr(pack_header, PACKAGE_UNUSED_1_LEN), 0, PACKAGE_UNUSED_1_LEN);
-    // unused 2
-    memset(offset_ptr(pack_header, PACKAGE_UNUSED_2_LEN), 0, PACKAGE_UNUSED_2_LEN);
+    memset(offset_ptr(pack_header, PACKAGE_UNUSED_LEN), 0, PACKAGE_UNUSED_LEN);
 
     _emit_message(msg_callback, "Writing package contents");
 
