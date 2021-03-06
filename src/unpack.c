@@ -45,42 +45,36 @@
 
 #define CHUNK_LEN 262144 // 256K
 
-static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
-    copy_int_as_le(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
-
-    *src_off += dst_len;
+static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t src_off) {
+    copy_int_as_le(dst, (void*) ((uintptr_t) src + src_off), dst_len);
 }
 
-static void _copy_str_to_field(void *dst, const void *src, const size_t dst_len, size_t *src_off) {
-    memcpy(dst, (void*) ((uintptr_t) src + *src_off), dst_len);
-    *src_off += dst_len;
+static void _copy_str_to_field(void *dst, const void *src, const size_t dst_len, size_t src_off) {
+    memcpy(dst, (void*) ((uintptr_t) src + src_off), dst_len);
 }
 
 static int _parse_package_header(argus_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
-    size_t header_off = 0;
-
     if (memcmp(header_data, FORMAT_MAGIC, PACKAGE_MAGIC_LEN) != 0) {
         libarp_set_error("Package magic is incorrect");
         return -1;
     }
-    header_off += PACKAGE_MAGIC_LEN;
 
-    _copy_int_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, &header_off);
+    _copy_int_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, PACKAGE_VERSION_OFF);
 
     if (pack->major_version != 1) {
         libarp_set_error("Package version is not supported");
         return -1;
     }
 
-    _copy_str_to_field(&pack->compression_type, header_data, PACKAGE_COMPRESSION_LEN, &header_off);
-    _copy_str_to_field(&pack->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, &header_off);
-    _copy_int_to_field(&pack->total_parts, header_data, PACKAGE_PARTS_LEN, &header_off);
-    _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, &header_off);
-    _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, &header_off);
-    _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, &header_off);
-    _copy_int_to_field(&pack->resource_count, header_data, PACKAGE_RES_CNT_LEN, &header_off);
-    _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, &header_off);
-    _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, &header_off);
+    _copy_str_to_field(&pack->compression_type, header_data, PACKAGE_COMPRESSION_LEN, PACKAGE_COMPRESSION_OFF);
+    _copy_str_to_field(&pack->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, PACKAGE_NAMESPACE_OFF);
+    _copy_int_to_field(&pack->total_parts, header_data, PACKAGE_PARTS_LEN, PACKAGE_PARTS_OFF);
+    _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, PACKAGE_CAT_OFF_OFF);
+    _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, PACKAGE_CAT_LEN_OFF);
+    _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, PACKAGE_CAT_CNT_OFF);
+    _copy_int_to_field(&pack->resource_count, header_data, PACKAGE_RES_CNT_LEN, PACKAGE_RES_CNT_OFF);
+    _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, PACKAGE_BODY_OFF_OFF);
+    _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, PACKAGE_BODY_LEN_OFF);
 
     return 0;
 }
@@ -326,10 +320,10 @@ static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
     return memcmp(a->name, b->name, MIN(a->name_len_s, b->name_len_s));
 }
 
-static int _read_var_string(const void *catalogue, size_t *cur_off, char **target, size_t str_len_s) {
+static int _read_var_string(const void *catalogue, size_t off, char **target, size_t str_len_s) {
     if (str_len_s > 0) {    
         char tmp[256];
-        _copy_str_to_field(tmp, catalogue, str_len_s, cur_off);
+        _copy_str_to_field(tmp, catalogue, str_len_s, off);
         *target[str_len_s] = '\0';
 
         if ((*target = malloc(str_len_s + 1)) == NULL) {
@@ -352,15 +346,15 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
     unsigned char *catalogue = (unsigned char*) ((uintptr_t) pack_data_view + pack->cat_off);
     
-    size_t cur_off = 0;
+    size_t node_start = 0;
     for (size_t i = 0; i < pack->node_count; i++) {
-        if (pack->cat_len - cur_off < 2) {
+        if (pack->cat_len - node_start < NODE_DESC_LEN_LEN) {
             libarp_set_error("Catalogue underflow");
             return -1;
         }
 
         uint16_t node_desc_len;
-        _copy_int_to_field(&node_desc_len, catalogue, 2, &cur_off);
+        _copy_int_to_field(&node_desc_len, catalogue, NODE_DESC_LEN_LEN, node_start + NODE_DESC_LEN_OFF);
 
         if (node_desc_len < NODE_DESC_BASE_LEN) {
             libarp_set_error("Node descriptor is too small");
@@ -368,7 +362,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         } else if (node_desc_len > NODE_DESC_MAX_LEN) {
             libarp_set_error("Node descriptor is too large");
             return -1;
-        } else if (pack->cat_len - cur_off < node_desc_len - (uint64_t) 2) {
+        } else if (pack->cat_len - node_start < node_desc_len) {
             libarp_set_error("Catalogue underflow");
             return -1;
         }
@@ -382,15 +376,15 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
         node_desc_t *node = pack->all_nodes[i];
 
-        _copy_int_to_field(&node->type, catalogue, 1, &cur_off);
-        _copy_int_to_field(&node->part_index, catalogue, 2, &cur_off);
-        _copy_int_to_field(&node->data_off, catalogue, 8, &cur_off);
-        _copy_int_to_field(&node->data_len, catalogue, 8, &cur_off);
-        _copy_int_to_field(&node->data_uc_len, catalogue, 8, &cur_off);
-        _copy_int_to_field(&node->crc, catalogue, 4, &cur_off);
-        _copy_int_to_field(&node->name_len_s, catalogue, 1, &cur_off);
-        _copy_int_to_field(&node->ext_len_s, catalogue, 1, &cur_off);
-        _copy_int_to_field(&node->media_type_len_s, catalogue, 1, &cur_off);
+        _copy_int_to_field(&node->type, catalogue, NODE_DESC_TYPE_LEN, node_start + NODE_DESC_TYPE_OFF);
+        _copy_int_to_field(&node->part_index, catalogue, NODE_DESC_PART_LEN, node_start + NODE_DESC_PART_OFF);
+        _copy_int_to_field(&node->data_off, catalogue, NODE_DESC_DATA_OFF_LEN, node_start + NODE_DESC_DATA_OFF_OFF);
+        _copy_int_to_field(&node->data_len, catalogue, NODE_DESC_DATA_LEN_LEN, node_start + NODE_DESC_DATA_LEN_OFF);
+        _copy_int_to_field(&node->data_uc_len, catalogue, NODE_DESC_UC_DATA_LEN_LEN, node_start + NODE_DESC_UC_DATA_LEN_OFF);
+        _copy_int_to_field(&node->crc, catalogue, NODE_DESC_CRC_LEN, node_start + NODE_DESC_CRC_OFF);
+        _copy_int_to_field(&node->name_len_s, catalogue, NODE_DESC_NAME_LEN_LEN, node_start + NODE_DESC_NAME_LEN_OFF);
+        _copy_int_to_field(&node->ext_len_s, catalogue, NODE_DESC_EXT_LEN_LEN, node_start + NODE_DESC_EXT_LEN_OFF);
+        _copy_int_to_field(&node->media_type_len_s, catalogue, NODE_DESC_MT_LEN_LEN, node_start + NODE_DESC_MT_LEN_OFF);
 
         if (NODE_DESC_BASE_LEN + node->name_len_s + node->media_type_len_s > node_desc_len) {
             libarp_set_error("Variable string lengths mismatch descriptor length");
@@ -407,9 +401,13 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             return -1;
         }
 
-        _read_var_string(catalogue, &cur_off, &node->name, node->name_len_s);
-        _read_var_string(catalogue, &cur_off, &node->ext, node->ext_len_s);
-        _read_var_string(catalogue, &cur_off, &node->media_type, node->media_type_len_s);
+        size_t name_off = node_start + NODE_DESC_NAME_OFF;
+        size_t ext_off = name_off + node->name_len_s;
+        size_t mt_off = ext_off + node->ext_len_s;
+
+        _read_var_string(catalogue, name_off, &node->name, node->name_len_s);
+        _read_var_string(catalogue, ext_off, &node->ext, node->ext_len_s);
+        _read_var_string(catalogue, mt_off, &node->media_type, node->media_type_len_s);
 
         validate_path_component(node->name, node->name_len_s);
 
