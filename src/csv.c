@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MIN(a, b) (a < b ? a : b)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static int _csv_insert_cmp(const void *a, const void *b) {
     const char *csv_line_a = (char*) a;
@@ -56,7 +56,7 @@ static int _csv_find_cmp(const void *needle, const void *node_data) {
     return memcmp(needle, csv_line, key_len);
 }
 
-csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_csv, size_t user_len) {    
+csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_csv, size_t user_len) {
     // We could probably do some fancy SIMD stuff here to parse the CSV data
     // more efficiently, but this implementation is going to be used exclusively
     // in the process of creating packages, which isn't performance-critical.
@@ -74,7 +74,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
 
     size_t total_len = stock_len + 1 + (user_csv != NULL ? (user_len + 1) : 0);
 
-    void *tree_data;
+    void *tree_data = NULL;
     if ((tree_data = malloc(total_len)) == NULL) {
         libarp_set_error("malloc failed");
         return NULL;
@@ -93,11 +93,12 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     size_t line_count = 0;
 
     char *cur = (char*) tree_data;
-    size_t remaining = stock_len;
+    size_t remaining = total_len;
 
+    // this loop basically just replaces all the newlines with null terminators
     while (remaining > 0) {
         char *line_end = (char*) memchr(cur, '\n', remaining);
-        size_t line_len;
+        size_t line_len = 0;
 
         if (line_end == NULL) {
             line_len = remaining;
@@ -120,7 +121,14 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
         line_count += 1;
     }
 
-    bt_node_t *bt_nodes;
+    if (line_count == 0) {
+        free(tree_data);
+
+        libarp_set_error("No media type mappings are present");
+        return NULL;
+    }
+
+    bt_node_t *bt_nodes = NULL;
     if ((bt_nodes = calloc(line_count, sizeof(bt_node_t))) == NULL) {
         free(tree_data);
 
@@ -131,10 +139,11 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     bt_node_t *root = &bt_nodes[0];
 
     cur = (char*) tree_data;
-    remaining = 0;
+    remaining = total_len;
 
     size_t node_index = 1;
 
+    // this loop actually processes the raw data into a binary tree
     while (remaining > 0) {
         size_t line_len = strlen(cur);
 
@@ -150,7 +159,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
         cur += line_len + 1; // account for null terminator again
     }
 
-    csv_file_t *csv;
+    csv_file_t *csv = NULL;
     if ((csv = malloc(sizeof(csv_file_t))) == NULL) {
         free(bt_nodes);
         free(tree_data);

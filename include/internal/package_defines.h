@@ -54,8 +54,8 @@
 #define PART_UNUSED_LEN 6
 
 #define PART_MAGIC_OFF 0
-#define PART_INDEX_OFF 0
-#define PART_UNUSED_OFF 0
+#define PART_INDEX_OFF 8
+#define PART_UNUSED_OFF 10
 
 #define PACKAGE_PART_HEADER_LEN 0x10
 

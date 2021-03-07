@@ -22,14 +22,20 @@
 #define ARCH_X64
 #endif
 
+#define CRC_LOOKUP_TABLE_SIZE 256U
+#define CRC_INITIAL 0xFFFFFFFF
+
+#define BITS_PER_BYTE 8U
+#define BYTES_PER_U64 8U
+
 static bool lookup_table_initted = false;
-static uint32_t crc_lookup[256];
+static uint32_t crc_lookup[CRC_LOOKUP_TABLE_SIZE];
 
 static void _compute_crc_lookup_table(void) {
-    for (uint16_t i = 0; i < 256; i++) {
+    for (uint16_t i = 0; i < CRC_LOOKUP_TABLE_SIZE; i++) {
         uint32_t crc = i;
-        for (uint8_t j = 0; j < 8; j++) {
-            crc = crc & 1 ? (crc >> 1) ^ CRC_POLY_REV : crc >> 1;
+        for (uint8_t j = 0; j < BITS_PER_BYTE; j++) {
+            crc = crc & 1U ? (crc >> 1U) ^ CRC_POLY_REV : crc >> 1U;
         }
         crc_lookup[i] = crc;
     }
@@ -49,7 +55,7 @@ static inline bool _is_sse42_supported(void) {
 #endif
 
 static inline uint32_t _x86_crc32c(uint32_t initial, const void *data, size_t len) {
-    size_t data_block_len = 8;
+    size_t data_block_len = BYTES_PER_U64;
 
     uint32_t crc = initial;
     for (size_t i = 0; i < len - (len % data_block_len); i += data_block_len) {
@@ -72,7 +78,7 @@ static inline uint32_t _sw_crc32c(uint32_t initial, const void *data, size_t len
     uint32_t crc = initial;
 
     for (size_t i = 0; i < len; i++) {
-        crc = (crc >> 8) ^ crc_lookup[(crc & 0xFF) ^ data_uc[i]];
+        crc = (crc >> BITS_PER_BYTE) ^ crc_lookup[(crc & 0xFF) ^ data_uc[i]];
     }
 
     return ~crc;
@@ -89,5 +95,5 @@ uint32_t crc32c_cont(uint32_t initial, const void *data, size_t len) {
 }
 
 uint32_t crc32c(const void *data, size_t len) {
-    return crc32c_cont(~0, data, len);
+    return crc32c_cont(CRC_INITIAL, data, len);
 }

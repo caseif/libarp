@@ -15,6 +15,8 @@
 
 typedef void *ArgusPackage;
 
+typedef const void *ConstArgusPackage;
+
 typedef struct ArpResource {
     void *data;
     size_t len;

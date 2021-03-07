@@ -18,6 +18,7 @@
 
 #include "zlib.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -40,10 +41,12 @@
 #include <sys/mman.h>
 #endif
 
-#define MIN(a, b) (a < b ? a : b)
-#define MAX(a, b) (a > b ? a : b)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define CHUNK_LEN 262144 // 256K
+
+#define VAR_STR_BUF_LEN 256
 
 static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t src_off) {
     copy_int_as_le(dst, (void*) ((uintptr_t) src + src_off), dst_len);
@@ -135,7 +138,7 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
 }
 
 static int _validate_part_files(argus_package_t *pack, const char *primary_path) {
-    char *real_path;
+    char *real_path = NULL;
     #ifdef _WIN32
     real_path = _fullpath(NULL, primary_path, (size_t) -1);
     #else
@@ -146,7 +149,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         return -1;
     }
 
-    const char *file_base;
+    const char *file_base = NULL;
 
     #ifdef _WIN32
     if ((file_base = MAX(strrchr(real_path, '\\'), strrchr(real_path, '/'))) != NULL) {
@@ -165,49 +168,54 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     // _b = buffer length, includes null terminator
     // _s = string length, does not include null terminator
     size_t file_base_len_s = strlen(file_base);
+    size_t file_base_len_b = file_base_len_s + 1;
 
     if (memcmp(file_base + file_base_len_s - sizeof("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
         libarp_set_error("Unexpected file extension for primary package file");
         return -1;
     }
 
-    size_t stem_len_b = file_base_len_s - sizeof("." PACKAGE_EXT) + 1;
-    char *file_stem;
+    size_t stem_len_s = file_base_len_s - sizeof("." PACKAGE_EXT);
+    size_t stem_len_b = stem_len_s + 1;
+    char *file_stem = NULL;
     if ((file_stem = malloc(stem_len_b)) == NULL) {
         libarp_set_error("malloc failed");
         return -1;
     }
-    memcpy(file_stem, file_base, stem_len_b - 1);
+    memcpy(file_stem, file_base, stem_len_s);
     file_stem[stem_len_b - 1] = '\0';
 
-    char *parent_dir;
-    size_t parent_dir_len_b;
+    char *parent_dir = NULL;
+    size_t parent_dir_len_s = 0;
+    size_t parent_dir_len_b = 0;
     if (file_base != real_path) {
-        parent_dir_len_b = file_base - real_path + 1;
+        parent_dir_len_s = file_base - real_path;
+        parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
             
             libarp_set_error("malloc failed");
             return -1;
         }
-        memcpy(parent_dir, real_path, parent_dir_len_b - 1);
+        memcpy(parent_dir, real_path, parent_dir_len_s);
         parent_dir[parent_dir_len_b - 1] = '\0';
     } else {
-        parent_dir_len_b = 1;
+        parent_dir_len_s = 0;
+        parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
             
             libarp_set_error("malloc failed");
             return -1;
         }
-        parent_dir[0] = '\0';
+        parent_dir[parent_dir_len_b - 1] = '\0';
     }
 
     size_t suffix_index = stem_len_b - 1 - sizeof(PACKAGE_PART_1_SUFFIX);
     if (stem_len_b > sizeof(PACKAGE_PART_1_SUFFIX) - 1
             && memcmp(file_base + suffix_index, PACKAGE_PART_1_SUFFIX, sizeof(PACKAGE_PART_1_SUFFIX) - 1) == 0) {
         stem_len_b -= sizeof(PACKAGE_PART_1_SUFFIX);
-        char *file_stem_new;
+        char *file_stem_new = NULL;
         if ((file_stem_new = realloc(file_stem, stem_len_b)) == NULL) {
             free(parent_dir);
             free(file_stem);
@@ -218,7 +226,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         file_stem = file_stem_new;
     }
 
-    if ((pack->part_paths[0] = malloc(file_base_len_s + 1)) == NULL) {
+    if ((pack->part_paths[0] = malloc(file_base_len_b)) == NULL) {
         free(parent_dir);
         free(file_stem);
 
@@ -226,27 +234,40 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         return -1;
     }
 
-    memcpy(pack->part_paths[0], file_base, file_base_len_s);
-    pack->part_paths[file_base_len_s] = '\0';
+    memcpy(pack->part_paths[0], file_base, file_base_len_b);
 
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
-        char *part_path;
-        size_t part_path_len_b = parent_dir_len_b - 1
-                + stem_len_b - 1
-                + sizeof(".part000") - 1
-                + sizeof("." PACKAGE_EXT);
+        char *part_path = NULL;
+        size_t part_path_len_b = parent_dir_len_s
+                + stem_len_s
+                + strlen(".part000")
+                + strlen("." PACKAGE_EXT);
+
         if ((part_path = malloc(part_path_len_b)) == NULL) {
             libarp_set_error("malloc failed");
 
             part_err = true;
             break;
         }
+
         sprintf(part_path, "%s%s.part%03d." PACKAGE_EXT, parent_dir, file_stem, i);
-        
-        pack->part_paths[i - 1] = part_path;
+
+        if ((pack->part_paths[i - 1] = malloc(part_path_len_b)) == NULL) {
+            free(part_path);
+
+            libarp_set_error("malloc failed");
+
+            part_err = true;
+            break;
+        }
+
+        memcpy(pack->part_paths[i - 1], part_path, part_path_len_b);
         
         FILE *part_file = fopen(part_path, "r");
+
+        free(part_path);
+        part_path = NULL;
 
         if (part_file == NULL) {
             if (errno == ENOENT) {
@@ -301,7 +322,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
             break;
         }
 
-        uint16_t part_index = part_header[PART_MAGIC_LEN] | part_header[PART_MAGIC_LEN + 1] << 8;
+        uint16_t part_index = 0;
+        copy_int_as_le(&part_index, offset_ptr(part_header, PART_INDEX_OFF), PART_INDEX_LEN);
         if (part_index != i) {
             libarp_set_error("Package part index is incorrect");
             
@@ -321,16 +343,20 @@ static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
 }
 
 static int _read_var_string(const void *catalogue, size_t off, char **target, size_t str_len_s) {
-    if (str_len_s > 0) {    
-        char tmp[256];
+    assert(str_len_s < VAR_STR_BUF_LEN);
+
+    size_t str_len_b = str_len_s + 1;
+
+    if (str_len_s > 0) {
+        char tmp[VAR_STR_BUF_LEN];
         _copy_str_to_field(tmp, catalogue, str_len_s, off);
         *target[str_len_s] = '\0';
 
-        if ((*target = malloc(str_len_s + 1)) == NULL) {
+        if ((*target = malloc(str_len_b)) == NULL) {
             libarp_set_error("malloc failed");
             return -1;
         }
-        memcpy(*target, tmp, str_len_s + 1);
+        memcpy(*target, tmp, str_len_b);
     } else {
         *target = NULL;
     }
@@ -353,7 +379,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             return -1;
         }
 
-        uint16_t node_desc_len;
+        uint16_t node_desc_len = 0;
         _copy_int_to_field(&node_desc_len, catalogue, NODE_DESC_LEN_LEN, node_start + NODE_DESC_LEN_OFF);
 
         if (node_desc_len < NODE_DESC_BASE_LEN) {
@@ -506,7 +532,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return -1;
     }
 
-    argus_package_t *pack;
+    argus_package_t *pack = NULL;
     if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
         fclose(package_file);
 
@@ -514,7 +540,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return -1;
     }
 
-    int rc;
+    int rc = (int) 0xDEADBEEF;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         unload_package(pack);
         fclose(package_file);
@@ -529,7 +555,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return rc;
     }
 
-    if ((pack->part_paths = calloc(1, sizeof(void*) * pack->total_parts)) == NULL) {
+    if ((pack->part_paths = calloc(pack->total_parts, sizeof(void*))) == NULL) {
         unload_package(pack);
         fclose(package_file);
 
@@ -544,7 +570,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return rc;
     }
 
-    void *pack_data_view;
+    void *pack_data_view = NULL;
     #ifdef _WIN32
     HANDLE file_mapping = CreateFileMappingW(package_file, NULL, PAGE_READONLY,
             package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
@@ -587,12 +613,12 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
 
     memcpy(pack_header, data, PACKAGE_HEADER_LEN);
 
-    argus_package_t *pack;
+    argus_package_t *pack = NULL;
     if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
         return ENOMEM;
     }
 
-    int rc;
+    int rc = (int) 0xDEADBEEF;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         unload_package(pack);
         return rc;
@@ -682,8 +708,8 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
-    argus_package_t *real_pack = (argus_package_t*) package;
+arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
+    const argus_package_t *real_pack = (const argus_package_t*) package;
 
     size_t path_len_s = strlen(path);
 
@@ -691,7 +717,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     memcpy(path_copy, path, path_len_s + 1);
     char *path_tail = path_copy;
     size_t cursor = 0;
-    char *needle;
+    char *needle = NULL;
 
     if ((needle = strchr(path_tail, NAMESPACE_DELIM)) == NULL) {
         free(path_copy);
@@ -754,7 +780,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
     }
 
     if (cur_node->loaded_data != NULL) {
-        return (arp_resource_t*) cur_node->loaded_data;
+        return cur_node->loaded_data;
     }
 
     if (cur_node->part_index > real_pack->total_parts) {
@@ -783,7 +809,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         return NULL;
     }
 
-    void *raw_data;
+    void *raw_data = NULL;
     if ((raw_data = malloc(cur_node->data_len)) == NULL) {
         fclose(part_file);
 
@@ -811,11 +837,11 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         return NULL;
     }
 
-    void *final_data;
+    void *final_data = NULL;
 
     if (real_pack->compression_type[0] != '\0') {
         if (strcmp(real_pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
-            int rc;
+            int rc = (int) 0xDEADBEEF;
 
             z_stream defl_stream;
             defl_stream.zalloc = Z_NULL;
@@ -831,7 +857,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
                 return NULL;
             }
 
-            void *inflated_data;
+            void *inflated_data = NULL;
             if ((inflated_data = malloc(cur_node->data_uc_len)) == NULL) {
                 free(raw_data);
 
@@ -860,18 +886,19 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
 
                     rc = inflate(&defl_stream, Z_NO_FLUSH);
                     switch (rc) {
+                        case Z_STREAM_END:
+                            goto end_inflate_loop; // ew
                         case Z_STREAM_ERROR:
                         case Z_NEED_DICT:
                         case Z_DATA_ERROR:
                         case Z_MEM_ERROR:
+                        default:
                             inflateEnd(&defl_stream);
                             free(inflated_data);
                             free(raw_data);
 
                             libarp_set_error("zlib inflate failed");
                             return NULL;
-                        case Z_STREAM_END:
-                            goto end_inflate_loop; // ew
                     }
 
                     size_t got_len = CHUNK_LEN - defl_stream.avail_out;
@@ -912,7 +939,7 @@ arp_resource_t *load_resource(const ArgusPackage package, const char *path) {
         final_data = raw_data;
     }
 
-    arp_resource_t *res;
+    arp_resource_t *res = NULL;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
         free(final_data);
 

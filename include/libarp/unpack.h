@@ -19,6 +19,6 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
 
 int unload_package(ArgusPackage package);
 
-arp_resource_t *load_resource(const ArgusPackage package, const char *path);
+arp_resource_t *load_resource(ConstArgusPackage package, const char *path);
 
 void unload_resource(arp_resource_t *resource);

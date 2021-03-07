@@ -44,6 +44,8 @@ typedef struct FsNode {
 
 typedef fs_node_t *fs_node_ptr;
 
+typedef const fs_node_t *const_fs_node_ptr;
+
 typedef fs_node_ptr *fs_node_ptr_arr;
 
 typedef struct PackageImportantSizes {

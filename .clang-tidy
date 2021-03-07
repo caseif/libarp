@@ -1,0 +1,15 @@
+{
+    "Checks": "*,\
+        -android-cloexec-fopen,\
+        -bugprone-reserved-identifier,\
+        -cert-dcl37-c,\
+        -cert-dcl51-cpp,\
+        -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,\
+        -cppcoreguidelines-avoid-non-const-global-variables,\
+        -google-readability-todo,\
+        -hicpp-signed-bitwise,\
+        -llvm-else-after-return,\
+        -llvmlibc-restrict-system-libc-headers,\
+        -misc-no-recursion,\
+        -readability-else-after-return"
+}

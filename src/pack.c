@@ -19,6 +19,7 @@
 #include "internal/util.h"
 #include "internal/generated/media_types.csv.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -54,7 +55,7 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     } else if (namespace_len_s > PACKAGE_NAMESPACE_LEN) {
         libarp_set_error("Namespace length is too long");
         return NULL;
-    } else if (validate_path_component(pack_namespace, namespace_len_s) != 0) {
+    } else if (validate_path_component(pack_namespace, (uint8_t) namespace_len_s) != 0) {
         return NULL;
     }
 
@@ -224,13 +225,13 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         return -1;
     }
 
-    DIR *root;
+    DIR *root = NULL;
     if ((root = opendir(root_path)) == NULL) {
         libarp_set_error("Failed to open directory");
         return -1;
     }
 
-    fs_node_ptr node;
+    fs_node_ptr node = NULL;
     if ((node = calloc(1, sizeof(fs_node_t))) == NULL) {
         libarp_set_error("calloc failed");
         return ENOMEM;
@@ -248,7 +249,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         node->type = FS_NODE_TYPE_DIR;
         // calloc sets the name and ext to null - the caller will set these if necessary
 
-        char *child_full_path;
+        char *child_full_path = NULL;
         if ((child_full_path = malloc(strlen(root_path) + 1 + NAME_MAX + 1)) == NULL) {
             _free_fs_node(node);
 
@@ -256,7 +257,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             return ENOMEM;
         }
 
-        struct dirent *de;
+        struct dirent *de = NULL;
         while ((de = readdir(root)) != NULL) {
             sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
 
@@ -273,46 +274,50 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             }
         }
 
-        if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
-            free(child_full_path);
-            _free_fs_node(node);
+        if (node->children_count > 0) {
+            if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
+                free(child_full_path);
+                _free_fs_node(node);
 
-            libarp_set_error("malloc failed");
-            return ENOMEM;
-        }
-
-        size_t child_index = 0;
-        while ((de = readdir(root)) != NULL && child_index < node->children_count) {
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
-                continue;
+                libarp_set_error("malloc failed");
+                return ENOMEM;
             }
 
-            sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
-
-            stat_t child_stat;
-            stat(child_full_path, &child_stat);
-
-            fs_node_ptr child_node;
-            recursion_count++;
-            {
-                int rc = _create_fs_tree(child_full_path, media_types, &child_node);
-                if (rc != 0) {
-                    free(child_full_path);
-                    _free_fs_node(node);
-
-                    *res = NULL;
-                    return rc;
+            size_t child_index = 0;
+            while ((de = readdir(root)) != NULL && child_index < node->children_count) {
+                if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
+                    continue;
                 }
+
+                sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
+
+                stat_t child_stat;
+                stat(child_full_path, &child_stat);
+
+                fs_node_ptr child_node = NULL;
+                recursion_count++;
+                {
+                    int rc = _create_fs_tree(child_full_path, media_types, &child_node);
+                    if (rc != 0) {
+                        free(child_full_path);
+                        _free_fs_node(node);
+
+                        *res = NULL;
+                        return rc;
+                    }
+                }
+                recursion_count--;
+
+                node->children[child_index] = child_node;
+
+                child_index++;
             }
-            recursion_count--;
 
-            node->children[child_index] = child_node;
-
-            child_index++;
+            // just in case
+            node->children_count = child_index;
+        } else {
+            node->children = NULL;
         }
-
-        // just in case
-        node->children_count = child_index;
 
         free(child_full_path);
 
@@ -356,7 +361,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     node->target_path = realpath(root_path, NULL);
     #endif
 
-    char *path_copy;
+    char *path_copy = NULL;
     if ((path_copy = strdup(root_path)) == NULL) {
         _free_fs_node(node);
 
@@ -364,7 +369,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         return ENOMEM;
     }
 
-    char *file_name;
+    char *file_name = NULL;
     #ifdef _WIN32
     file_name = path_copy;
     PathStripPathW(file_name);
@@ -378,9 +383,9 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     }
     #endif
 
-    size_t stem_len_s;
-    size_t ext_len_s;
-    const char *ext_delim;
+    size_t stem_len_s = 0;
+    size_t ext_len_s = 0;
+    const char *ext_delim = NULL;
 
     if (node->type == FS_NODE_TYPE_DIR) {
         stem_len_s = strlen(file_name);
@@ -475,9 +480,11 @@ static size_t _fs_node_count(fs_node_ptr root, bool dirs_only) {
 }
 
 // forward declaration required for recursive calls
-static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off);
+static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off,
+        size_t *node_count);
 
-static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off) {
+static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off,
+        size_t *node_count) {
     if (root == NULL) {
         return 0;
     }
@@ -487,13 +494,27 @@ static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_
         root->index = *dir_off;
         node_arr[*dir_off] = root;
         *dir_off += 1;
+        // We track the node count separately to prove to the static analyzer
+        // that the array is being fully populated. We could just use the value
+        // in file_off since that will effectively be identical, but LLVM isn't
+        // clever enough to figure that out and will throw a warning when we try
+        // to access the flattened node array.
+        //
+        // EDIT: This actually still doesn't seem to be enough to prove it. I
+        // think it's because we're populating the array at two different
+        // offsets concurrently. In any case, I think tracking the node count
+        // separately is still probably a cleaner and less bug-prone way of
+        // doing it.
+        *node_count += 1;
+
         for (size_t i = 0; i < root->children_count; i++) {
-            _flatten_dir(root->children[i], node_arr, dir_off, file_off);
+            _flatten_dir(root->children[i], node_arr, dir_off, file_off, node_count);
         }
     } else {
         root->index = *file_off;
         node_arr[*file_off] = root;
         *file_off += 1;
+        *node_count += 1;
     }
 
     return 0;
@@ -503,36 +524,39 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
     size_t total_count = _fs_node_count(root, false);
     size_t dir_count = _fs_node_count(root, true);
 
-    fs_node_ptr_arr node_arr;
-    if ((node_arr = malloc(sizeof(void*) * total_count)) == NULL) {
+    *node_count = 0;
+
+    if (total_count == 0) {
+        *flattened = NULL;
+        *node_count = 0;
+        return 0;
+    }
+
+    fs_node_ptr_arr node_arr = NULL;
+    if ((node_arr = malloc(sizeof(void*) *total_count)) == NULL) {
         libarp_set_error("malloc failed");
         return ENOMEM;
     }
 
-    int rc;
+    int rc = (int) 0xDEADBEEF;
 
     size_t dir_off = 0;
     size_t file_off = dir_count;
-    if ((rc = _flatten_dir(root, node_arr, &dir_off, &file_off)) != 0) {
+    if ((rc = _flatten_dir(root, node_arr, &dir_off, &file_off, node_count)) != 0) {
         free(node_arr);
 
         return rc;
     }
 
-    //TODO: scan-build says that not every element in `flattened` is guaranteed
-    //      to be initialized. I think this is a false positive, but I'm not 100
-    //      percent certain.
-
-    *node_count = total_count;
     *flattened = node_arr;
 
     return 0;
 }
 
 // forward declaration required for recursive calls
-static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes);
+static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes);
 
-static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes) {
+static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes) {
     if (sizes->part_count == 0) {
         sizes->part_count = 1;
     }
@@ -609,8 +633,10 @@ static int _compute_important_sizes(const fs_node_ptr fs_root, size_t max_part_l
 }
 
 static char *_get_part_path(const char *target_dir, const char *pack_name, uint16_t index, bool skip_suffix, char *buf) {
+    const size_t part_name_base_len_b = strlen(".part") + 3 + strlen(".arp") + 1;
+
     if (buf == NULL) {
-        buf = malloc(strlen(target_dir) + strlen(PATH_SEPARATOR) + strlen(pack_name) + 13);
+        buf = malloc(strlen(target_dir) + strlen(PATH_SEPARATOR) + strlen(pack_name) + part_name_base_len_b);
     }
 
     if (skip_suffix && index != 1) {
@@ -642,13 +668,14 @@ static int _unlink_part_files(const char *target_dir, const char *pack_name, siz
 
 static int _write_package_contents_to_disk(const unsigned char *header_contents, fs_node_ptr_arr fs_flat,
         const char *target_dir, arp_packing_options_t *opts, package_important_sizes_t *important_sizes) {
-    FILE *cur_part_file;
+    FILE *cur_part_file = NULL;
     char *cur_part_path = NULL;
 
     bool skip_part_suffix = important_sizes->part_count == 1;
     cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
     if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
+        free(cur_part_path);
         libarp_set_error("Failed to open first part file on disk");
         return -1;
     }
@@ -657,6 +684,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
     if (fwrite(header_contents, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
         fclose(cur_part_file);
         unlink(cur_part_path);
+        free(cur_part_path);
 
         libarp_set_error("Failed to write package header to disk");
         return -1;
@@ -672,6 +700,8 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
     // write node contents
     for (size_t i = 0; i < important_sizes->node_count; i++) {
+        // disable lint to remove a very stubborn false positive
+        // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
         fs_node_ptr node = fs_flat[i];
 
         size_t new_part_len = body_off + node->size;
@@ -683,6 +713,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             cur_part_path = _get_part_path(target_dir, opts->pack_name, cur_part_index, false, cur_part_path);
 
             if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index - 1, false);
 
                 libarp_set_error("Failed to open part file for writing on disk");
@@ -693,11 +724,13 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             unsigned char part_header[PACKAGE_PART_HEADER_LEN];
 
             memset(part_header, 0, sizeof(part_header));
+            // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
             memcpy(part_header, PART_MAGIC, PART_MAGIC_LEN);
             copy_int_as_le(offset_ptr(part_header, PART_INDEX_OFF), &cur_part_index, sizeof(cur_part_index));
 
             if (fwrite(part_header, sizeof(part_header), 1, cur_part_file) != 1) {
                 fclose(cur_part_file);
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, false);
 
                 libarp_set_error("Failed to write part header to disk");
@@ -733,6 +766,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 if (dir_list_index == DIR_LIST_BUFFER_LEN) {
                     if (fwrite(dir_listing_buffer, sizeof(dir_listing_buffer), 1, cur_part_file) == 0) {
                         fclose(cur_part_file);
+                        free(cur_part_path);
                         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                         libarp_set_error("Failed to write directory contents to part file on disk");
@@ -757,6 +791,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 size_t write_bytes = dir_list_index * sizeof(dir_listing_buffer[0]);
                 if (fwrite(dir_listing_buffer, write_bytes, 1, cur_part_file) == 0) {
                     fclose(cur_part_file);
+                    free(cur_part_path);
                     _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                     libarp_set_error("Failed to write directory contents to part file on disk");
@@ -780,6 +815,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             stat_t node_stat;
             if (stat(node->target_path, &node_stat) != 0) {
                 fclose(cur_part_file);
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat node at path %s", node->target_path);
@@ -791,6 +827,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             if (cur_node_size != node->size) {
                 fclose(cur_part_file);
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Node changed sizes at path %s", node->target_path);
@@ -798,9 +835,10 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 return -1;
             }
 
-            FILE *cur_node_file;
+            FILE *cur_node_file = NULL;
             if ((cur_node_file = fopen(node->target_path, "rb")) != 0) {
                 fclose(cur_part_file);
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to read node at path %s", node->target_path);
@@ -808,16 +846,16 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 return -1;
             }
 
-            uint32_t crc = ~0;
+            uint32_t crc = 0;
             bool began_crc = false;
 
             size_t data_len = 0;
 
-            size_t read_bytes;
+            size_t read_bytes = 0;
             while ((read_bytes = fread(copy_buffer, 1, COPY_BUFFER_LEN, cur_node_file)) > 0) {
                 if (fwrite(copy_buffer, read_bytes, 1, cur_part_file) != 1) {
                     fclose(cur_part_file);
-                    fclose(cur_node_file);
+                    free(cur_part_path);
                     _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                     libarp_set_error("Failed to copy node data to part file on disk");
@@ -839,6 +877,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             if (ferror(cur_node_file)) {
                 fclose(cur_part_file);
+                free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Encountered error while reading node at path %s", node->target_path);
@@ -856,7 +895,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         }
     }
 
-    FILE *first_part_file;
+    FILE *first_part_file = NULL;
     if (cur_part_index == 1) {
         first_part_file = cur_part_file;
     } else {
@@ -865,12 +904,15 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
         if ((first_part_file = fopen(cur_part_path, "wb")) == NULL) {
+            free(cur_part_path);
             _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
             libarp_set_error("Failed to open first part file on disk");
             return -1;
         }
     }
+
+    free(cur_part_path);                
 
     unsigned char cat_buf[COPY_BUFFER_LEN];
     size_t cat_buf_off = 0;
@@ -967,7 +1009,7 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
     _emit_message(msg_callback, "Reading filesystem contents");
 
     fs_node_ptr fs_tree = NULL;
-    int rc;
+    int rc = (int) 0xDEADBEEF;
     if ((rc = _create_fs_tree(src_path, media_types, &fs_tree)) != 0) {
         _free_fs_node(fs_tree);
         return rc;
@@ -984,12 +1026,14 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
 
     _emit_message(msg_callback, "Flattening filesystem map");
 
-    fs_node_ptr_arr fs_flat;
-    size_t fs_node_count;
+    fs_node_ptr_arr fs_flat = NULL;
+    size_t fs_node_count = 0;
     if ((rc = _flatten_fs(fs_tree, &fs_flat, &fs_node_count)) != 0) {
         _free_fs_node(fs_tree);
         return rc;
     }
+
+    assert(fs_node_count == important_sizes.node_count);
 
     _emit_message(msg_callback, "Generating package header");
 
@@ -1001,6 +1045,7 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
 
     // header population
     // magic number
+    // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
     memcpy(offset_ptr(pack_header, PACKAGE_MAGIC_OFF), FORMAT_MAGIC, PACKAGE_MAGIC_LEN);
     // version
     uint16_t version = CURRENT_MAJOR_VERSION;
