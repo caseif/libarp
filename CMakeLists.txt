@@ -104,8 +104,6 @@ add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E
     copy_directory "${INC_DIR}/${PROJECT_NAME}/" "${HDR_OUT_DIR}/${PROJECT_NAME}/")
 
-set(CMAKE_C_CLANG_TIDY clang-tidy)
-
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
 
 target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR}")
