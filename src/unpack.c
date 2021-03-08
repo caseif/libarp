@@ -75,6 +75,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
     _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, PACKAGE_CAT_OFF_OFF);
     _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, PACKAGE_CAT_LEN_OFF);
     _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, PACKAGE_CAT_CNT_OFF);
+    _copy_int_to_field(&pack->directory_count, header_data, PACKAGE_DIR_CNT_LEN, PACKAGE_DIR_CNT_OFF);
     _copy_int_to_field(&pack->resource_count, header_data, PACKAGE_RES_CNT_LEN, PACKAGE_RES_CNT_OFF);
     _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, PACKAGE_BODY_OFF_OFF);
     _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, PACKAGE_BODY_LEN_OFF);
