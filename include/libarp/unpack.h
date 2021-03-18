@@ -22,3 +22,5 @@ int unload_package(ArgusPackage package);
 arp_resource_t *load_resource(ConstArgusPackage package, const char *path);
 
 void unload_resource(arp_resource_t *resource);
+
+int list_resources(ConstArgusPackage package, arp_resource_info_t **info_out, size_t *count_out);

@@ -29,6 +29,7 @@ typedef struct NodeDesc {
     char *ext;
     char *media_type;
 
+    size_t index;
     arp_resource_t *loaded_data;
     bt_node_t *children_tree;
 } node_desc_t;

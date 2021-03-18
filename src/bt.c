@@ -47,3 +47,15 @@ bt_node_t *bt_find(const bt_node_t *root, const void *needle, int (*cmp_fn)(cons
         return bt_find(root->r, needle, cmp_fn);
     }
 }
+
+void bt_foreach(const bt_node_t *root, bt_foreach_fn fn) {
+    if (root->l != NULL) {
+        fn(root->l);
+        bt_foreach(root->l, fn);
+    }
+
+    if (root->r != NULL) {
+        fn(root->r);
+        bt_foreach(root->r, fn);
+    }
+}

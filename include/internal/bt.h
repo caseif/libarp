@@ -21,6 +21,10 @@ typedef struct BtNode {
     void *data;
 } bt_node_t;
 
+typedef void (*bt_foreach_fn)(bt_node_t*);
+
 bt_node_t *bt_insert(bt_node_t *root, bt_node_t *storage, void *data, int (*cmp_fn)(const void *a, const void *b));
 
 bt_node_t *bt_find(const bt_node_t *root, const void *needle, int (*cmp_fn)(const void *needle, const void *node_data));
+
+void bt_foreach(const bt_node_t *root, bt_foreach_fn fn);

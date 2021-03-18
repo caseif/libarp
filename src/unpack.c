@@ -13,6 +13,7 @@
 #include "internal/crc32c.h"
 #include "internal/file_defines.h"
 #include "internal/package_defines.h"
+#include "internal/stack.h"
 #include "internal/unpack_util.h"
 #include "internal/util.h"
 
@@ -374,10 +375,17 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
     unsigned char *catalogue = (unsigned char*) ((uintptr_t) pack_data_view + pack->cat_off);
     
     size_t node_start = 0;
+    size_t real_node_count = 0;
+    size_t real_resource_count = 0;
     for (size_t i = 0; i < pack->node_count; i++) {
         if (pack->cat_len - node_start < NODE_DESC_LEN_LEN) {
             libarp_set_error("Catalogue underflow");
             return -1;
+        }
+        
+        real_node_count += 1;
+        if (real_node_count > pack->node_count) {
+            libarp_set_error("Actual node count mismatches header field");
         }
 
         uint16_t node_desc_len = 0;
@@ -402,6 +410,8 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         }
 
         node_desc_t *node = pack->all_nodes[i];
+
+        node->index = i;
 
         _copy_int_to_field(&node->type, catalogue, NODE_DESC_TYPE_LEN, node_start + NODE_DESC_TYPE_OFF);
         _copy_int_to_field(&node->part_index, catalogue, NODE_DESC_PART_LEN, node_start + NODE_DESC_PART_OFF);
@@ -458,7 +468,19 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
                 libarp_set_error("Directory contains too many files");
                 return -1;
             }
+        } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
+            real_resource_count += 1;
         }
+    }
+
+    if (real_node_count != pack->node_count) {
+        libarp_set_error("Actual node count mismatches header field");
+        return -1;
+    }
+
+    if (real_resource_count != pack->resource_count) {
+        libarp_set_error("Actual resource count mismatches header field");
+        return -1;
     }
 
     unsigned char *body = (unsigned char*) ((uintptr_t) pack_data_view + pack->body_off);
@@ -475,7 +497,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
         if ((node->children_tree = calloc(1, sizeof(bt_node_t) * (child_count + 1))) == NULL) {
             libarp_set_error("calloc failed");
-            return -1;
+            return ENOMEM;
         }
 
         for (uint64_t j = 0; j < child_count; j++) {
@@ -709,6 +731,168 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
+static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **data_out) {
+    if (node->part_index > pack->total_parts) {
+        libarp_set_error("Node part index is invalid");
+        return -1;
+    }
+
+    FILE *part_file = fopen(pack->part_paths[node->part_index - 1], "r");
+    if (part_file == NULL) {
+        libarp_set_error("Failed to open part file");
+        return -1;
+    }
+
+    stat_t part_stat;
+    if (fstat(fileno(part_file), &part_stat) != 0) {
+        fclose(part_file);
+
+        libarp_set_error("Failed to stat part file");
+        return -1;
+    }
+
+    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + node->data_off + node->data_len) {
+        fclose(part_file);
+
+        libarp_set_error("Part file is too small to fit node data");
+        return -1;
+    }
+
+    void *raw_data = NULL;
+    if ((raw_data = malloc(node->data_len)) == NULL) {
+        fclose(part_file);
+
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    fseek(part_file, PACKAGE_PART_HEADER_LEN + node->data_off, SEEK_SET);
+
+    if ((fread(raw_data, node->data_len, 1, part_file)) != 1) {
+        free(raw_data);
+        fclose(part_file);
+
+        libarp_set_error("Failed to read from part file");
+        return -1;
+    }
+
+    fclose(part_file);
+
+    uint32_t real_crc = crc32c(raw_data, node->data_len);
+    if (real_crc != node->crc) {
+        free(raw_data);
+
+        libarp_set_error("CRC mismatch");
+        return -1;
+    }
+
+    void *final_data = NULL;
+
+    if (pack->compression_type[0] != '\0') {
+        if (strcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
+            int rc = (int) 0xDEADBEEF;
+
+            z_stream defl_stream;
+            defl_stream.zalloc = Z_NULL;
+            defl_stream.zfree = Z_NULL;
+            defl_stream.opaque = Z_NULL;
+            defl_stream.avail_in = 0;
+            defl_stream.next_in = Z_NULL;
+            
+            if ((rc = inflateInit(&defl_stream)) != Z_OK) {
+                free(raw_data);
+
+                libarp_set_error("zlib inflateInit failed");
+                return -1;
+            }
+
+            void *inflated_data = NULL;
+            if ((inflated_data = malloc(node->data_uc_len)) == NULL) {
+                free(raw_data);
+
+                libarp_set_error("malloc failed");
+                return ENOMEM;
+            }
+
+            size_t remaining = node->data_len;
+            size_t bytes_decompressed = 0;
+            void *data_window = raw_data;
+
+            unsigned char dfl_out_buf[CHUNK_LEN];
+
+            while (remaining > 0) {
+                size_t to_read = MIN(remaining, CHUNK_LEN);
+
+                defl_stream.avail_in = to_read;
+                defl_stream.next_in = data_window;
+
+                remaining -= to_read;
+                data_window = (void*) ((uintptr_t) data_window + to_read);
+
+                while (defl_stream.avail_out == 0) {
+                    defl_stream.avail_out = CHUNK_LEN;
+                    defl_stream.next_out = dfl_out_buf;
+
+                    rc = inflate(&defl_stream, Z_NO_FLUSH);
+                    switch (rc) {
+                        case Z_STREAM_END:
+                            goto end_inflate_loop; // ew
+                        case Z_STREAM_ERROR:
+                        case Z_NEED_DICT:
+                        case Z_DATA_ERROR:
+                        case Z_MEM_ERROR:
+                        default:
+                            inflateEnd(&defl_stream);
+                            free(inflated_data);
+                            free(raw_data);
+
+                            libarp_set_error("zlib inflate failed");
+                            return -1;
+                    }
+
+                    size_t got_len = CHUNK_LEN - defl_stream.avail_out;
+
+                    if (bytes_decompressed + got_len > node->data_uc_len) {
+                        inflateEnd(&defl_stream);
+                        free(inflated_data);
+                        free(raw_data);
+
+                        libarp_set_error("Decompressed data exceeds expected length");
+                        return -1;
+                    }
+
+                    memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
+                    bytes_decompressed += got_len;
+                }
+            }
+            
+            end_inflate_loop:
+            inflateEnd(&defl_stream);
+            free(raw_data);
+
+            if (rc != Z_STREAM_END) {
+                free(inflated_data);
+
+                libarp_set_error("DEFLATE stream is incomplete");
+                return -1;
+            }
+
+            final_data = inflated_data;
+        } else {
+            free(raw_data);
+
+            libarp_set_error("Unrecognized compression magic");
+            return -1;
+        }
+    } else {
+        final_data = raw_data;
+    }
+
+    *data_out = final_data;
+
+    return 0;
+}
+
 arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     const argus_package_t *real_pack = (const argus_package_t*) package;
 
@@ -784,171 +968,21 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         return cur_node->loaded_data;
     }
 
-    if (cur_node->part_index > real_pack->total_parts) {
-        libarp_set_error("Node part index is invalid");
+    void *data = NULL;
+    int rc = 0;
+    if ((rc = _load_node_data(real_pack, cur_node, &data)) != 0) {
         return NULL;
-    }
-
-    FILE *part_file = fopen(real_pack->part_paths[cur_node->part_index - 1], "r");
-    if (part_file == NULL) {
-        libarp_set_error("Failed to open part file");
-        return NULL;
-    }
-
-    stat_t part_stat;
-    if (fstat(fileno(part_file), &part_stat) != 0) {
-        fclose(part_file);
-
-        libarp_set_error("Failed to stat part file");
-        return NULL;
-    }
-
-    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + cur_node->data_off + cur_node->data_len) {
-        fclose(part_file);
-
-        libarp_set_error("Part file is too small to fit node data");
-        return NULL;
-    }
-
-    void *raw_data = NULL;
-    if ((raw_data = malloc(cur_node->data_len)) == NULL) {
-        fclose(part_file);
-
-        libarp_set_error("malloc failed");
-        return NULL;
-    }
-
-    fseek(part_file, PACKAGE_PART_HEADER_LEN + cur_node->data_off, SEEK_SET);
-
-    if ((fread(raw_data, cur_node->data_len, 1, part_file)) != 1) {
-        free(raw_data);
-        fclose(part_file);
-
-        libarp_set_error("Failed to read from part file");
-        return NULL;
-    }
-
-    fclose(part_file);
-
-    uint32_t real_crc = crc32c(raw_data, cur_node->data_len);
-    if (real_crc != cur_node->crc) {
-        free(raw_data);
-
-        libarp_set_error("CRC mismatch");
-        return NULL;
-    }
-
-    void *final_data = NULL;
-
-    if (real_pack->compression_type[0] != '\0') {
-        if (strcmp(real_pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
-            int rc = (int) 0xDEADBEEF;
-
-            z_stream defl_stream;
-            defl_stream.zalloc = Z_NULL;
-            defl_stream.zfree = Z_NULL;
-            defl_stream.opaque = Z_NULL;
-            defl_stream.avail_in = 0;
-            defl_stream.next_in = Z_NULL;
-            
-            if ((rc = inflateInit(&defl_stream)) != Z_OK) {
-                free(raw_data);
-
-                libarp_set_error("zlib inflateInit failed");
-                return NULL;
-            }
-
-            void *inflated_data = NULL;
-            if ((inflated_data = malloc(cur_node->data_uc_len)) == NULL) {
-                free(raw_data);
-
-                libarp_set_error("malloc failed");
-                return NULL;
-            }
-
-            size_t remaining = cur_node->data_len;
-            size_t bytes_decompressed = 0;
-            void *data_window = raw_data;
-
-            unsigned char dfl_out_buf[CHUNK_LEN];
-
-            while (remaining > 0) {
-                size_t to_read = MIN(remaining, CHUNK_LEN);
-
-                defl_stream.avail_in = to_read;
-                defl_stream.next_in = data_window;
-
-                remaining -= to_read;
-                data_window = (void*) ((uintptr_t) data_window + to_read);
-
-                while (defl_stream.avail_out == 0) {
-                    defl_stream.avail_out = CHUNK_LEN;
-                    defl_stream.next_out = dfl_out_buf;
-
-                    rc = inflate(&defl_stream, Z_NO_FLUSH);
-                    switch (rc) {
-                        case Z_STREAM_END:
-                            goto end_inflate_loop; // ew
-                        case Z_STREAM_ERROR:
-                        case Z_NEED_DICT:
-                        case Z_DATA_ERROR:
-                        case Z_MEM_ERROR:
-                        default:
-                            inflateEnd(&defl_stream);
-                            free(inflated_data);
-                            free(raw_data);
-
-                            libarp_set_error("zlib inflate failed");
-                            return NULL;
-                    }
-
-                    size_t got_len = CHUNK_LEN - defl_stream.avail_out;
-
-                    if (bytes_decompressed + got_len > cur_node->data_uc_len) {
-                        inflateEnd(&defl_stream);
-                        free(inflated_data);
-                        free(raw_data);
-
-                        libarp_set_error("Decompressed data exceeds expected length");
-                        return NULL;
-                    }
-
-                    memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
-                    bytes_decompressed += got_len;
-                }
-            }
-            
-            end_inflate_loop:
-            inflateEnd(&defl_stream);
-            free(raw_data);
-
-            if (rc != Z_STREAM_END) {
-                free(inflated_data);
-
-                libarp_set_error("DEFLATE stream is incomplete");
-                return NULL;
-            }
-
-            final_data = inflated_data;
-        } else {
-            free(raw_data);
-
-            libarp_set_error("Unrecognized compression magic");
-            return NULL;
-        }
-    } else {
-        final_data = raw_data;
     }
 
     arp_resource_t *res = NULL;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
-        free(final_data);
+        free(data);
 
         libarp_set_error("malloc failed");
         return NULL;
     }
 
-    res->data = final_data;
+    res->data = data;
     res->len = cur_node->data_len;
     res->extra = cur_node;
     cur_node->loaded_data = res;
@@ -968,4 +1002,156 @@ void unload_resource(arp_resource_t *resource) {
     ((node_desc_t*) resource->extra)->loaded_data = NULL;
 
     free(resource);
+}
+
+int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path, arp_resource_info_t *info_arr,
+        size_t *cur_off);
+
+int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path, arp_resource_info_t *info_arr,
+        size_t *cur_off) {
+    if (node->type == PACK_NODE_TYPE_RESOURCE) {
+        size_t path_len_s = strlen(running_path)
+                + node->name_len_s;
+        size_t path_len_b = path_len_s + 1;
+
+        size_t buf_len_b = path_len_b
+                + node->ext_len_s + 1
+                + node->media_type_len_s + 1;
+
+        char *buf = NULL;
+        if ((buf = malloc(buf_len_b)) == NULL) {
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+
+        char *path = buf;
+        char *ext = path + path_len_b;
+        char *mt = ext + node->ext_len_s + 1;
+
+        arp_resource_info_t *info = &info_arr[*cur_off];
+        *cur_off += 1;
+
+        snprintf(path, path_len_b, "%s%s", running_path, node->name);
+
+        memcpy(ext, node->ext, node->ext_len_s + 1);
+        memcpy(mt, node->media_type, node->media_type_len_s + 1);
+
+        info->path = path;
+        info->extension = ext;
+        info->media_type = mt;
+
+        return 0;
+    } else if (node->type == PACK_NODE_TYPE_DIRECTORY) {
+        int rc = 0xDEADBEEF;
+
+        // honestly I can't think of a sensible use case for having 65536 direct children in a directory
+        stack_t *bt_stack = stack_create(sizeof(void*), 512, 65536);
+
+        if ((rc = stack_push(bt_stack, node->children_tree)) != 0) {
+            return rc;
+        }
+
+        bt_node_t *cur;
+        while ((cur = stack_pop(bt_stack)) != NULL) {
+
+            node_desc_t *child = (node_desc_t*) cur->data;
+
+            char *new_running_path = NULL;
+
+            if (strlen(child->name) > 0) {
+                size_t new_rp_len_s = strlen(running_path) + 1 + strlen(child->name);
+                size_t new_rp_len_b = new_rp_len_s + 1;
+
+                if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
+                    libarp_set_error("malloc failed");
+                    return ENOMEM;
+                }
+
+                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, PACKAGE_PATH_DELIM);
+            } else {
+                if (running_path != NULL) {
+                    libarp_set_error("Non-root node has empty name");
+                    return -1;
+                }
+
+                size_t new_rp_len_s = strlen(pack_ns) + 1;
+                size_t new_rp_len_b = new_rp_len_s + 1;
+
+                if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
+                    libarp_set_error("malloc failed");
+                    return ENOMEM;
+                }
+
+                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, NAMESPACE_DELIM);
+            }
+
+            rc = _list_node_contents(child, pack_ns, new_running_path, info_arr, cur_off);
+
+            free(new_running_path);
+
+            if (rc != 0) {
+                return rc;
+            }
+            
+            if (cur->l != NULL) {
+                if ((rc = stack_push(bt_stack, cur->l)) != 0) {
+                    return rc;
+                }
+            }
+
+            if (cur->r != NULL) {
+                if ((rc = stack_push(bt_stack, cur->r)) != 0) {
+                    return rc;
+                }
+            }
+        }
+
+        return 0;
+    } else {
+        libarp_set_error("Unrecognized node type");
+        return -1;
+    }
+}
+
+int list_resources(ConstArgusPackage package, arp_resource_info_t **info_arr_out, size_t *count_out) {
+    *info_arr_out = NULL;
+    *count_out = 0;
+
+    if (package == NULL) {
+        libarp_set_error("Package cannot be null");
+        return -1;
+    }
+
+    const argus_package_t *real_pack = (const argus_package_t*) package;
+
+    if (real_pack->resource_count == 0) {
+        libarp_set_error("Package contains no resources");
+        return -1;
+    }
+
+    node_desc_t *root_node = real_pack->all_nodes[0];
+    if (root_node->type != PACK_NODE_TYPE_DIRECTORY) {
+        libarp_set_error("Root package node is not a directory");
+        return -1;
+    }
+
+    arp_resource_info_t *info_arr = NULL;
+    if ((info_arr = calloc(real_pack->resource_count, sizeof(arp_resource_info_t))) == NULL) {
+        libarp_set_error("calloc failed");
+        return ENOMEM;
+    }
+
+    int rc = 0xDEADBEEF;
+
+    size_t cur_off = 0;
+    if ((rc = _list_node_contents(real_pack->all_nodes[0], real_pack->package_namespace, NULL, info_arr, &cur_off)) != 0) {
+        free(info_arr);
+        
+        return rc;
+    }
+
+    *info_arr_out = info_arr;
+    *count_out = cur_off;
+
+    return 0;
 }

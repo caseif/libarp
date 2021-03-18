@@ -24,4 +24,10 @@ typedef struct ArpResource {
     void *extra;
 } arp_resource_t;
 
+typedef struct ArpResourceInfo {
+    char *path;
+    char *extension;
+    char *media_type;
+} arp_resource_info_t;
+
 const char *libarp_get_error(void);
