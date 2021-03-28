@@ -1,0 +1,8 @@
+#pragma once
+
+#define ARP_NAMESPACE_MAX 0x30
+
+#define COMPRESS_MAGIC_DEFLATE "df"
+
+#define NAMESPACE_DELIMITER ':'
+#define PACKAGE_PATH_DELIMITER '/'

@@ -7,6 +7,7 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#include "libarp/defines.h"
 #include "libarp/unpack.h"
 #include "internal/bt.h"
 #include "internal/common_util.h"
@@ -904,7 +905,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     size_t cursor = 0;
     char *needle = NULL;
 
-    if ((needle = strchr(path_tail, NAMESPACE_DELIM)) == NULL) {
+    if ((needle = strchr(path_tail, NAMESPACE_DELIMITER)) == NULL) {
         free(path_copy);
 
         libarp_set_error("Path must contain a namespace");
@@ -928,7 +929,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     // start at root
     node_desc_t *cur_node = real_pack->all_nodes[0];
 
-    while ((needle = strchr(path_tail, PACKAGE_PATH_DELIM)) != NULL) {
+    while ((needle = strchr(path_tail, PACKAGE_PATH_DELIMITER)) != NULL) {
         cursor = needle - path_tail;
 
         path_tail[cursor] = '\0';
@@ -1067,7 +1068,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
                     return ENOMEM;
                 }
 
-                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, PACKAGE_PATH_DELIM);
+                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, PACKAGE_PATH_DELIMITER);
             } else {
                 if (running_path != NULL) {
                     libarp_set_error("Non-root node has empty name");
@@ -1082,7 +1083,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
                     return ENOMEM;
                 }
 
-                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, NAMESPACE_DELIM);
+                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, NAMESPACE_DELIMITER);
             }
 
             rc = _list_node_contents(child, pack_ns, new_running_path, info_arr, cur_off);
