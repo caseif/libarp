@@ -87,7 +87,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
 
 static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
-            && memcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
+            && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
         libarp_set_error("Package compression type is not supported");
         return -1;
     }
@@ -790,7 +790,7 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
     void *final_data = NULL;
 
     if (pack->compression_type[0] != '\0') {
-        if (strcmp(pack->compression_type, COMPRESS_MAGIC_DEFLATE) == 0) {
+        if (strcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
             int rc = (int) 0xDEADBEEF;
 
             z_stream defl_stream;
@@ -905,7 +905,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     size_t cursor = 0;
     char *needle = NULL;
 
-    if ((needle = strchr(path_tail, NAMESPACE_DELIMITER)) == NULL) {
+    if ((needle = strchr(path_tail, ARP_NAMESPACE_DELIMITER)) == NULL) {
         free(path_copy);
 
         libarp_set_error("Path must contain a namespace");
@@ -929,7 +929,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     // start at root
     node_desc_t *cur_node = real_pack->all_nodes[0];
 
-    while ((needle = strchr(path_tail, PACKAGE_PATH_DELIMITER)) != NULL) {
+    while ((needle = strchr(path_tail, ARP_PATH_DELIMITER)) != NULL) {
         cursor = needle - path_tail;
 
         path_tail[cursor] = '\0';
@@ -1068,7 +1068,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
                     return ENOMEM;
                 }
 
-                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, PACKAGE_PATH_DELIMITER);
+                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, ARP_PATH_DELIMITER);
             } else {
                 if (running_path != NULL) {
                     libarp_set_error("Non-root node has empty name");
@@ -1083,7 +1083,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
                     return ENOMEM;
                 }
 
-                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, NAMESPACE_DELIMITER);
+                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, ARP_NAMESPACE_DELIMITER);
             }
 
             rc = _list_node_contents(child, pack_ns, new_running_path, info_arr, cur_off);
