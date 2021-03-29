@@ -36,9 +36,11 @@ void libarp_set_error(const char *msg) {
 
     fprintf(stderr, "[libarp] %s\n", err_msg);
 
+    #ifdef DEBUG
     #ifdef _WIN32
     __debugbreak();
     #else
     raise(SIGTRAP);
+    #endif
     #endif
 }
