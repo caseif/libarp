@@ -64,7 +64,7 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
         return NULL;
     }
 
-    if (max_part_len < PACKAGE_MIN_PART_LEN) {
+    if (max_part_len != 0 && max_part_len < PACKAGE_MIN_PART_LEN) {
         libarp_set_error("Max part length is too small");
         return NULL;
     }
@@ -584,7 +584,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
         }
 
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_stat.st_size;
-        if (new_len > max_part_len) {
+        if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
                 return -1;
@@ -603,7 +603,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
         size_t node_len = fs_root->children_count * NODE_DESCRIPTOR_INDEX_LEN;
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_len;
 
-        if (new_len > max_part_len) {
+        if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
                 return -1;
@@ -706,7 +706,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         fs_node_ptr node = fs_flat[i];
 
         size_t new_part_len = body_off + node->size;
-        if (new_part_len > opts->max_part_len) {
+        if (opts->max_part_len != 0 && new_part_len > opts->max_part_len) {
             fclose(cur_part_file);
 
             cur_part_index += 1;
