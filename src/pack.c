@@ -72,8 +72,8 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     arp_packing_options_t *opts = calloc(1, sizeof(arp_packing_options_t));
     opts->pack_name = calloc(1, name_len_s + 1);
     opts->pack_namespace = calloc(1, PACKAGE_NAMESPACE_LEN + 1);
-    opts->compression_type = calloc(1, PACKAGE_COMPRESSION_LEN + 1);
-    opts->media_types_path = calloc(1, media_types_path_len_s + 1);
+    opts->compression_type = compression_type_len_s > 0 ? calloc(1, PACKAGE_COMPRESSION_LEN + 1) : NULL;
+    opts->media_types_path = media_types_path_len_s > 0 ? calloc(1, media_types_path_len_s + 1) : NULL;
 
     memcpy(opts->pack_name, pack_name, name_len_s + 1);
     memcpy(opts->pack_namespace, pack_namespace, namespace_len_s + 1);
@@ -225,12 +225,6 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         return -1;
     }
 
-    DIR *root = NULL;
-    if ((root = opendir(root_path)) == NULL) {
-        libarp_set_error("Failed to open directory");
-        return -1;
-    }
-
     fs_node_ptr node = NULL;
     if ((node = calloc(1, sizeof(fs_node_t))) == NULL) {
         libarp_set_error("calloc failed");
@@ -249,6 +243,12 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         node->type = FS_NODE_TYPE_DIR;
         // calloc sets the name and ext to null - the caller will set these if necessary
 
+        DIR *root = NULL;
+        if ((root = opendir(root_path)) == NULL) {
+            libarp_set_error("Failed to open directory");
+            return -1;
+        }
+
         char *child_full_path = NULL;
         if ((child_full_path = malloc(strlen(root_path) + 1 + NAME_MAX + 1)) == NULL) {
             _free_fs_node(node);
@@ -258,6 +258,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         }
 
         struct dirent *de = NULL;
+        errno = 0;
         while ((de = readdir(root)) != NULL) {
             sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
 
@@ -266,13 +267,23 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             }
 
             stat_t child_stat;
-            stat(child_full_path, &child_stat);
+            if (stat(child_full_path, &child_stat) != 0) {
+                libarp_set_error("Failed to stat directory child while constructing fs tree (pass 1)");
+                return errno;
+            }
 
             if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)
                     || S_ISLNK(child_stat.st_mode)) {
                 node->children_count++;
             }
         }
+
+        if (errno != 0) {
+            libarp_set_error("Encountered error while constructing fs tree (pass 1)");
+            return errno;
+        }
+
+        rewinddir(root);
 
         if (node->children_count > 0) {
             if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
@@ -284,6 +295,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             }
 
             size_t child_index = 0;
+            errno = 0;
             while ((de = readdir(root)) != NULL && child_index < node->children_count) {
                 if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                     continue;
@@ -292,7 +304,10 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
                 sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
 
                 stat_t child_stat;
-                stat(child_full_path, &child_stat);
+                if (stat(child_full_path, &child_stat) != 0) {
+                    libarp_set_error("Failed to stat directory child while constructing fs tree (pass 2)");
+                    return errno;
+                }
 
                 fs_node_ptr child_node = NULL;
                 recursion_count++;
@@ -311,6 +326,13 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
                 node->children[child_index] = child_node;
 
                 child_index++;
+
+                errno = 0;
+            }
+
+            if (errno != 0) {
+                libarp_set_error("Encountered error while building fs tree (pass 2)");
+                return errno;
             }
 
             // just in case
@@ -324,6 +346,8 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         closedir(root);
     } else if (S_ISREG(root_stat.st_mode) || S_ISLNK(root_stat.st_mode)) {
         node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
+
+        node->size = root_stat.st_size;
     } else {
         free(node);
 
@@ -358,7 +382,15 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     memcpy(node->target_path, win32_path_buffer, win32_path_len);
     #else
     // realpath returns a malloc'd string, so assigning it directly is fine
-    node->target_path = realpath(root_path, NULL);
+    if ((node->target_path = realpath(root_path, NULL)) == NULL) {
+        _free_fs_node(node);
+
+        libarp_set_error("realpath failed");
+        return errno;
+    }
+
+    // annoyingly, realpath sets errno on success sometimes
+    errno = 0;
     #endif
 
     char *path_copy = NULL;
@@ -384,6 +416,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     #endif
 
     size_t stem_len_s = 0;
+    size_t stem_len_b = stem_len_s + 1;
     size_t ext_len_s = 0;
     const char *ext_delim = NULL;
 
@@ -409,7 +442,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         }
     }
 
-    if ((node->file_stem = malloc(stem_len_s + 1)) == NULL) {
+    if ((node->file_stem = malloc(stem_len_b)) == NULL) {
         free(path_copy);
         _free_fs_node(node);
 
@@ -418,6 +451,8 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     }
 
     memcpy(node->file_stem, file_name, stem_len_s);
+
+    node->file_stem[stem_len_b - 1] = '\0';
 
     if (ext_len_s > 0) {
         if ((node->file_ext = malloc(ext_len_s + 1)) == NULL) {
@@ -428,25 +463,34 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
             return ENOMEM;
         }
 
-        memcpy(node->file_ext, (const void*) (file_name + stem_len_s + 1), ext_len_s);
+        memcpy(node->file_ext, (const void*) (file_name + stem_len_b), ext_len_s);
     }
 
     free(path_copy);
 
     if (node->type != FS_NODE_TYPE_DIR) {
         const char *media_type = ext_len_s > 0 ? search_csv(media_types, node->file_ext) : DEFAULT_MEDIA_TYPE;
-        if (media_type == NULL || strlen(media_type) == 0 || strlen(media_type) > NODE_MT_MAX_LEN) {
+
+        if (media_type == NULL) {
+            media_type = DEFAULT_MEDIA_TYPE;
+        }
+        
+        size_t media_type_len_s = strlen(media_type);
+        size_t media_type_len_b = media_type_len_s + 1;
+
+        if (media_type_len_s == 0 || media_type_len_s > NODE_MT_MAX_LEN) {
             media_type = DEFAULT_MEDIA_TYPE;
         }
 
-        if ((node->media_type = malloc(strlen(media_type) + 1)) == NULL) {
+        if ((node->media_type = malloc(media_type_len_b)) == NULL) {
             _free_fs_node(node);
 
             libarp_set_error("malloc failed");
             return ENOMEM;
         }
 
-        memcpy(node->media_type, media_type, strlen(media_type) + 1);
+        memcpy(node->media_type, media_type, media_type_len_s);
+        node->media_type[media_type_len_b - 1] = '\0';
     }
 
     *res = node;
@@ -760,7 +804,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
             size_t dir_data_len = 0;
 
-            for (size_t cur_child_index = 0; i < node->children_count; i++) {
+            for (size_t cur_child_index = 0; cur_child_index < node->children_count; cur_child_index++) {
                 dir_listing_buffer[dir_list_index] = node->children[cur_child_index]->index;
                 dir_list_index += 1;
 
@@ -837,7 +881,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             }
 
             FILE *cur_node_file = NULL;
-            if ((cur_node_file = fopen(node->target_path, "rb")) != 0) {
+            if ((cur_node_file = fopen(node->target_path, "rb")) == NULL) {
                 fclose(cur_part_file);
                 free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
@@ -853,6 +897,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             size_t data_len = 0;
 
             size_t read_bytes = 0;
+            clearerr(cur_node_file);
             while ((read_bytes = fread(copy_buffer, 1, COPY_BUFFER_LEN, cur_node_file)) > 0) {
                 if (fwrite(copy_buffer, read_bytes, 1, cur_part_file) != 1) {
                     fclose(cur_part_file);
@@ -874,9 +919,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 data_len += read_bytes;
             }
 
-            fclose(cur_node_file);
-
-            if (ferror(cur_node_file)) {
+            if (!feof(cur_node_file)) {
                 fclose(cur_part_file);
                 free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
@@ -886,6 +929,8 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 return -1;
             }
 
+            fclose(cur_node_file);
+
             node->crc = crc;
             node->data_len = data_len; //TODO: account for compression
         } else {
@@ -894,6 +939,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             // just skip it
             continue;
         }
+
     }
 
     FILE *first_part_file = NULL;

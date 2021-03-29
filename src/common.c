@@ -36,7 +36,7 @@ void libarp_set_error(const char *msg) {
 
     fprintf(stderr, "[libarp] %s\n", err_msg);
 
-    #ifdef DEBUG
+    #ifndef NDEBUG
     #ifdef _WIN32
     __debugbreak();
     #else
