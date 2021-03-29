@@ -29,7 +29,7 @@
 void copy_int_as_le(void *dst, void *src, size_t len) {
     memcpy(dst, src, len);
 
-    int x = 0;
+    int x = 1;
     if (((unsigned char*) &x)[0] == 0) {
         // system is big-endian, so we need to convert to little
         #ifdef _WIN32
