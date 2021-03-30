@@ -416,7 +416,6 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     #endif
 
     size_t stem_len_s = 0;
-    size_t stem_len_b = stem_len_s + 1;
     size_t ext_len_s = 0;
     const char *ext_delim = NULL;
 
@@ -442,6 +441,9 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         }
     }
 
+    size_t stem_len_b = stem_len_s + 1;
+    size_t ext_len_b = ext_len_s + 1;
+
     if ((node->file_stem = malloc(stem_len_b)) == NULL) {
         free(path_copy);
         _free_fs_node(node);
@@ -453,9 +455,9 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     memcpy(node->file_stem, file_name, stem_len_s);
 
     node->file_stem[stem_len_b - 1] = '\0';
-
+    
     if (ext_len_s > 0) {
-        if ((node->file_ext = malloc(ext_len_s + 1)) == NULL) {
+        if ((node->file_ext = malloc(ext_len_b)) == NULL) {
             free(path_copy);
             _free_fs_node(node);
 
@@ -464,6 +466,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         }
 
         memcpy(node->file_ext, (const void*) (file_name + stem_len_b), ext_len_s);
+        node->file_ext[ext_len_b - 1] = '\0';
     }
 
     free(path_copy);
@@ -743,6 +746,15 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
     unsigned char copy_buffer[COPY_BUFFER_LEN];
 
+    if (fseek(cur_part_file, body_off, SEEK_SET) != 0) {
+        fclose(cur_part_file);
+        unlink(cur_part_path);
+        free(cur_part_path);
+
+        libarp_set_error("Failed to seek to body offset");
+        return errno;
+    }
+
     // write node contents
     for (size_t i = 0; i < important_sizes->node_count; i++) {
         // disable lint to remove a very stubborn false positive
@@ -959,7 +971,15 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         }
     }
 
-    free(cur_part_path);                
+    free(cur_part_path);
+
+    if (fseek(first_part_file, cat_off, SEEK_SET) != 0) {
+        free(cur_part_path);
+        _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
+
+        libarp_set_error("Failed to seek to catalogue offset");
+        return errno;
+    }
 
     unsigned char cat_buf[COPY_BUFFER_LEN];
     size_t cat_buf_off = 0;
@@ -1024,6 +1044,8 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_LEN_OFF), &desc_len, NODE_DESC_LEN_LEN);
 
         memcpy(offset_ptr(cat_buf, cat_buf_off), cur_node_buf, desc_len);
+
+        cat_buf_off += desc_len;
     }
 
     if (cat_buf_off != 0) {

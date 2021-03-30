@@ -9,6 +9,7 @@
 
 #include "internal/bt.h"
 #include "internal/csv.h"
+#include "internal/package_defines.h"
 #include "internal/util.h"
 
 #include <assert.h>
@@ -23,17 +24,25 @@ static int _csv_insert_cmp(const void *a, const void *b) {
     const char *csv_line_a = (char*) a;
     const char *csv_line_b = (char*) b;
 
-    size_t line_len_a = strlen(csv_line_a);
-    size_t line_len_b = strlen(csv_line_b);
-
-    const char *delim_a = (char*) memchr(csv_line_a, ',', line_len_a);
-    const char *delim_b = (char*) memchr(csv_line_b, ',', line_len_b);
+    const char *delim_a = strchr(csv_line_a, ',');
+    const char *delim_b = strchr(csv_line_b, ',');
 
     size_t key_len_a = delim_a - csv_line_a;
     size_t key_len_b = delim_b - csv_line_b;
 
-    // add one so memcmp sees null terminator
-    return memcmp(csv_line_a, csv_line_b, MIN(key_len_a, key_len_b) + 1);
+    assert(key_len_a <= NODE_EXT_MAX_LEN);
+    assert(key_len_b <= NODE_EXT_MAX_LEN);
+
+    char key_buf_a[NODE_EXT_MAX_LEN + 1];
+    char key_buf_b[NODE_EXT_MAX_LEN + 1];
+
+    memcpy(key_buf_a, csv_line_a, key_len_a);
+    memcpy(key_buf_b, csv_line_b, key_len_b);
+    key_buf_a[key_len_a] = '\0';
+    key_buf_b[key_len_b] = '\0';
+
+    int res = strcmp(key_buf_a, key_buf_b);
+    return res;
 }
 
 static int _csv_find_cmp(const void *needle, const void *node_data) {
@@ -51,9 +60,16 @@ static int _csv_find_cmp(const void *needle, const void *node_data) {
         return -1;
     }
 
-    size_t key_len = delim - csv_line;
+    size_t key_len = MIN(delim - csv_line, NODE_EXT_MAX_LEN);
 
-    return memcmp(needle, csv_line, key_len);
+    // copy the key to a buffer so that we can null-terminate it and use strcmp
+    char key_buf[NODE_EXT_MAX_LEN + 1];
+    memcpy(key_buf, csv_line, key_len);
+    key_buf[key_len] = '\0';
+
+    int res = strcmp(needle, key_buf);
+
+    return res;
 }
 
 csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_csv, size_t user_len) {
@@ -149,7 +165,8 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
 
         remaining -= line_len + 1; // account for null terminator
 
-        if (line_len == 0 || memchr(cur, ',', line_len) == NULL) {
+        char *delim = memchr(cur, ',', line_len);
+        if (line_len == 0 || delim == NULL || (delim - cur) > NODE_DESC_MAX_LEN) {
             cur += 1;
             continue;
         }

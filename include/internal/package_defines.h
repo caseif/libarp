@@ -69,7 +69,6 @@
 
 #define PACKAGE_PART_1_SUFFIX ".part001"
 
-#define NODE_DESC_BASE_LEN 0x23
 #define NODE_NAME_MAX_LEN 0xFF
 #define NODE_EXT_MAX_LEN 0xFF
 #define NODE_MT_MAX_LEN 0xFF
@@ -97,6 +96,8 @@
 #define NODE_DESC_EXT_LEN_OFF       0x22
 #define NODE_DESC_MT_LEN_OFF        0x23
 #define NODE_DESC_NAME_OFF          0x24
+
+#define NODE_DESC_BASE_LEN NODE_DESC_NAME_OFF
 
 // the length of an index to a node descriptor
 // directory nodes contain an array of node descriptor indices in their body

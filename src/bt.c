@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+//TODO: this creates a degenerate tree
 bt_node_t *bt_insert(bt_node_t *root, bt_node_t *storage, void *data, int (*cmp_fn)(const void *a, const void *b)) {
     if (root == NULL || root->children_count == 0) {
         assert(root == NULL || root == storage);
