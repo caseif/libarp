@@ -496,11 +496,6 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         uint64_t child_count = node->data_len / 4;
         uint32_t *node_children = (uint32_t*) ((uintptr_t) body + node->data_off);
 
-        if ((node->children_tree = calloc(1, sizeof(bt_node_t) * (child_count + 1))) == NULL) {
-            libarp_set_error("calloc failed");
-            return ENOMEM;
-        }
-
         for (uint64_t j = 0; j < child_count; j++) {
             uint32_t child_index = node_children[j];
 
@@ -509,10 +504,11 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
                 return -1;
             }
 
-            bt_node_t *root = j > 0 ? &node->children_tree[0] : NULL;
-            bt_node_t *storage = &node->children_tree[j];
-            bt_insert(root, storage, pack->all_nodes[child_index],
-                    (int (*)(const void*, const void*)) _compare_node_names);
+            if (bt_create(child_count + 1, &node->children_tree) == NULL) {
+                return errno;
+            }
+
+            bt_insert(&node->children_tree, pack->all_nodes[child_index], (BtInsertCmpFn) _compare_node_names);
         }
     }
 
@@ -673,8 +669,8 @@ static void _unload_node(node_desc_t *node) {
             free(node->loaded_data);
         }
         
-        if (node->children_tree != NULL) {
-            free(node->children_tree);
+        if (node->children_tree.initialized) {
+            bt_free(&node->children_tree);
         }
 
         if (node->name != NULL) {
@@ -934,21 +930,19 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
 
         path_tail[cursor] = '\0';
 
-        bt_node_t *found = bt_find(cur_node->children_tree, path_tail, _cmp_node_names);
-        if (found == NULL) {
+        cur_node = bt_find(&cur_node->children_tree, path_tail, _cmp_node_names);
+        if (cur_node == NULL) {
             free(path_copy);
 
             libarp_set_error("Resource does not exist at the specified path");
             return NULL;
         }
 
-        cur_node = (node_desc_t*) found->data;
-
         path_tail += cursor + 1;
     }
 
     // should be at terminal component now
-    bt_node_t *found = bt_find(cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
+    bt_node_t *found = bt_find(&cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
     if (found == NULL) {
         free(path_copy);
 
@@ -1046,9 +1040,10 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
         int rc = 0xDEADBEEF;
 
         // honestly I can't think of a sensible use case for having 65536 direct children in a directory
+        //TODO: would be nice to abstract this into some sort of bt_iterator object
         stack_t *bt_stack = stack_create(sizeof(void*), 512, 65536);
 
-        if ((rc = stack_push(bt_stack, node->children_tree)) != 0) {
+        if ((rc = stack_push(bt_stack, node->children_tree.root)) != 0) {
             return rc;
         }
 

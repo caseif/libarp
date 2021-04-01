@@ -144,15 +144,18 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
         return NULL;
     }
 
-    bt_node_t *bt_nodes = NULL;
-    if ((bt_nodes = calloc(line_count, sizeof(bt_node_t))) == NULL) {
+    csv_file_t *csv = NULL;
+    if ((csv = malloc(sizeof(csv_file_t))) == NULL) {
+        bt_free(&csv->tree);
         free(tree_data);
 
-        libarp_set_error("calloc failed");
+        libarp_set_error("malloc failed");
         return NULL;
     }
 
-    bt_node_t *root = &bt_nodes[0];
+    if (bt_create(line_count, &csv->tree) == NULL) {
+        return NULL;
+    }
 
     cur = (char*) tree_data;
     remaining = total_len;
@@ -171,34 +174,23 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
             continue;
         }
 
-        bt_insert(root, &bt_nodes[node_index++], cur, _csv_insert_cmp);
+        bt_insert(&csv->tree, cur, _csv_insert_cmp);
 
         cur += line_len + 1; // account for null terminator again
     }
 
-    csv_file_t *csv = NULL;
-    if ((csv = malloc(sizeof(csv_file_t))) == NULL) {
-        free(bt_nodes);
-        free(tree_data);
-
-        libarp_set_error("malloc failed");
-        return NULL;
-    }
-    csv->tree = root;
     csv->data = tree_data;
 
     return csv;
 }
 
 const char *search_csv(const csv_file_t *csv, const char *key) {
-    bt_node_t *node = bt_find(csv->tree, key, _csv_find_cmp);
+    const char *line = bt_find(&csv->tree, key, _csv_find_cmp);
     
-    if (node == NULL) {
+    if (line == NULL) {
         return NULL;
     }
 
-    const char *line = node->data;
-    
     const char *delim = strchr(line, ',');
     if (delim == NULL) {
         assert(0);
@@ -208,6 +200,6 @@ const char *search_csv(const csv_file_t *csv, const char *key) {
 }
 
 void free_csv(csv_file_t *csv) {
-    free(csv->tree);
+    bt_free(&csv->tree);
     free(csv->data);
 }

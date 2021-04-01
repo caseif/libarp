@@ -9,22 +9,36 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 
 struct BtNode;
 
 typedef struct BtNode {
     // this count includes the top-level node itself
-    size_t children_count;
     struct BtNode *l;
     struct BtNode *r;
+    struct BtNode *parent;
     void *data;
 } bt_node_t;
 
-typedef void (*bt_foreach_fn)(bt_node_t*);
+typedef struct BinaryTree {
+    bool initialized;
+    size_t capacity;
+    size_t count;
+    bt_node_t *root;
+    bt_node_t *storage;
+    bool malloced;
+} binary_tree_t;
 
-bt_node_t *bt_insert(bt_node_t *root, bt_node_t *storage, void *data, int (*cmp_fn)(const void *a, const void *b));
+typedef int (*BtInsertCmpFn)(const void *a, const void *b);
 
-bt_node_t *bt_find(const bt_node_t *root, const void *needle, int (*cmp_fn)(const void *needle, const void *node_data));
+typedef int (*BtFindCmpFn)(const void *needle, const void *node_data);
 
-void bt_foreach(const bt_node_t *root, bt_foreach_fn fn);
+binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out);
+
+void bt_free(binary_tree_t *tree);
+
+void bt_insert(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn);
+
+void *bt_find(const binary_tree_t *tree, const void *needle, BtFindCmpFn cmp_fn);

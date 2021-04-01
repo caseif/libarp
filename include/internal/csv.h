@@ -14,7 +14,7 @@
 #include "internal/bt.h"
 
 typedef struct CsvFile {
-    bt_node_t *tree;
+    binary_tree_t tree;
     void *data;
 } csv_file_t;
 

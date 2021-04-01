@@ -31,7 +31,7 @@ typedef struct NodeDesc {
 
     size_t index;
     arp_resource_t *loaded_data;
-    bt_node_t *children_tree;
+    binary_tree_t children_tree;
 } node_desc_t;
 
 typedef struct ArgusPack {
