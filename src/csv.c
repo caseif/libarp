@@ -160,8 +160,6 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     cur = (char*) tree_data;
     remaining = total_len;
 
-    size_t node_index = 0;
-
     // this loop actually processes the raw data into a binary tree
     while (remaining > 0) {
         size_t line_len = strlen(cur);

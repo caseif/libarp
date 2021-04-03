@@ -1069,9 +1069,124 @@ static void _emit_message(void (*callback)(const char*), const char *msg) {
     }
 }
 
-int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts,
+static bool validate_src_path(const char *src_path) {
+    stat_t src_stat;
+    if (stat(src_path, &src_stat) != 0) {
+        switch (errno) {
+            case EACCES: {
+                libarp_set_error("Cannot access source path");
+                return false;
+            }
+            case ENAMETOOLONG: {
+                libarp_set_error("Source path is too long");
+                return false;
+            }
+            case ENOENT: {
+                libarp_set_error("Source path does not exist");
+                return false;
+            }
+            case ENOTDIR: {
+                libarp_set_error("A component of the source path is not a directory");
+                return false;
+            }
+            default: {
+                char err_msg[ERR_MSG_MAX_LEN];
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to validate source directory (rc: %d)", errno);
+                libarp_set_error(err_msg);
+                return false;
+            }
+        }
+    }
+
+    if (!S_ISDIR(src_stat.st_mode)) {
+        libarp_set_error("Source path is not a directory");
+        return false;
+    }
+
+    return true;
+}
+
+static bool validate_output_path(const char *output_path) {
+    stat_t output_stat;
+    if (stat(output_path, &output_stat) != 0) {
+        if (errno == ENOENT) {
+            if (mkdir(output_path, 0755) != 0) {
+                switch (errno) {
+                    case EACCES: {
+                        libarp_set_error("Cannot access output path prefix");
+                        return false;
+                    }
+                    case ENAMETOOLONG: {
+                        libarp_set_error("Output path is too long");
+                        return false;
+                    }
+                    case ENOENT: {
+                        libarp_set_error("Output path prefix does not exist");
+                        return false;
+                    }
+                    case ENOSPC: {
+                        libarp_set_error("Filesystem containing output path prefix is full");
+                        return false;
+                    }
+                    case ENOTDIR: {
+                        libarp_set_error("Output path prefix contains a non-directory");
+                        return false;
+                    }
+                    case EROFS: {
+                        libarp_set_error("Output path prefix is on read-only filesystem");
+                        return false;
+                    }
+                    default: {
+                        libarp_set_error("Failed to create output path");
+                        return false;
+                    }
+                }
+            }
+        } else {
+            switch (errno) {
+                case EACCES: {
+                    libarp_set_error("Cannot access source path");
+                    return false;
+                }
+                case ENAMETOOLONG: {
+                    libarp_set_error("Output path is too long");
+                    return false;
+                }
+                case ENOENT: {
+                    libarp_set_error("Output path does not exist");
+                    return false;
+                }
+                case ENOTDIR: {
+                    libarp_set_error("A component of the source path is not a directory");
+                    return false;
+                }
+                default: {
+                    char err_msg[ERR_MSG_MAX_LEN];
+                    snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to validate source directory (rc: %d)", errno);
+                    libarp_set_error(err_msg);
+                    return false;
+                }
+            }
+        }
+    } else if (!S_ISDIR(output_stat.st_mode)) {
+        libarp_set_error("Output path is not a directory");
+        return false;
+    }
+
+    return true;
+}
+
+int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingOptions opts,
         void (*msg_callback)(const char*)) {
     arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
+
+    if (!validate_src_path(src_path)) {
+        return -1;
+    }
+
+    if (!validate_output_path(output_dir)) {
+        return -1;
+    }
 
     csv_file_t *media_types = _load_media_types(real_opts);
 
@@ -1149,7 +1264,7 @@ int create_arp_from_fs(const char *src_path, const char *target_dir, ArpPackingO
 
     _emit_message(msg_callback, "Writing package contents");
 
-    _write_package_contents_to_disk(pack_header, fs_flat, target_dir, real_opts, &important_sizes);
+    _write_package_contents_to_disk(pack_header, fs_flat, output_dir, real_opts, &important_sizes);
 
     free(fs_flat);
     free(media_types);
