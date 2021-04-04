@@ -35,7 +35,7 @@ typedef struct FsNode {
     struct FsNode **children;
     size_t children_count;
 
-    size_t index;
+    uint64_t index;
     uint16_t part;
     uint64_t data_len;
     uint64_t data_off;
@@ -49,10 +49,10 @@ typedef const fs_node_t *const_fs_node_ptr;
 typedef fs_node_ptr *fs_node_ptr_arr;
 
 typedef struct PackageImportantSizes {
-    size_t cat_len;
-    size_t node_count;
-    size_t directory_count;
-    size_t resource_count;
-    size_t part_count;
-    size_t body_lens[PACKAGE_MAX_PARTS];
+    uint64_t cat_len;
+    uint32_t node_count;
+    uint32_t directory_count;
+    uint32_t resource_count;
+    uint16_t part_count;
+    uint64_t body_lens[PACKAGE_MAX_PARTS];
 } package_important_sizes_t;

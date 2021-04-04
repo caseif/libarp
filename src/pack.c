@@ -1257,10 +1257,8 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_OFF_OFF), &body_off, PACKAGE_BODY_OFF_LEN);
     // body size
     copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &important_sizes.body_lens[0], PACKAGE_BODY_LEN_LEN);
-    // unused 1
-    memset(offset_ptr(pack_header, PACKAGE_UNUSED_1_OFF), 0, PACKAGE_UNUSED_1_LEN);
-    // unused 2
-    memset(offset_ptr(pack_header, PACKAGE_UNUSED_2_OFF), 0, PACKAGE_UNUSED_2_LEN);
+    // reserved 1
+    memset(offset_ptr(pack_header, PACKAGE_RESERVED_1_OFF), 0, PACKAGE_RESERVED_1_LEN);
 
     _emit_message(msg_callback, "Writing package contents");
 
