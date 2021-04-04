@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,9 +70,9 @@ int stack_push(stack_t *stack, void *data) {
         stack->data = new_data;
     }
 
-    stack->index += 1;
-
     memcpy((void*) ((uintptr_t) stack->data + (stack->index * stack->el_len)), data, stack->el_len);
+
+    stack->index += 1;
 
     return 0;
 }

@@ -173,7 +173,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     size_t file_base_len_s = strlen(file_base);
     size_t file_base_len_b = file_base_len_s + 1;
 
-    if (memcmp(file_base + file_base_len_s - sizeof("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
+    if (memcmp(file_base + file_base_len_s - strlen("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
         libarp_set_error("Unexpected file extension for primary package file");
         return -1;
     }
@@ -353,7 +353,7 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
     if (str_len_s > 0) {
         char tmp[VAR_STR_BUF_LEN];
         _copy_str_to_field(tmp, catalogue, str_len_s, off);
-        *target[str_len_s] = '\0';
+        tmp[str_len_s] = '\0';
 
         if ((*target = malloc(str_len_b)) == NULL) {
             libarp_set_error("malloc failed");
@@ -447,6 +447,8 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         _read_var_string(catalogue, ext_off, &node->ext, node->ext_len_s);
         _read_var_string(catalogue, mt_off, &node->media_type, node->media_type_len_s);
 
+        node_start = mt_off + node->media_type_len_s;
+
         validate_path_component(node->name, node->name_len_s);
 
         if (node->type != PACK_NODE_TYPE_RESOURCE && node->type != PACK_NODE_TYPE_DIRECTORY) {
@@ -496,16 +498,16 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
         uint64_t child_count = node->data_len / 4;
         uint32_t *node_children = (uint32_t*) ((uintptr_t) body + node->data_off);
 
+        if (bt_create(child_count + 1, &node->children_tree) == NULL) {
+            return errno;
+        }
+
         for (uint64_t j = 0; j < child_count; j++) {
             uint32_t child_index = node_children[j];
 
             if (child_index == 0 || child_index >= pack->node_count) {
                 libarp_set_error("Illegal node index in directory");
                 return -1;
-            }
-
-            if (bt_create(child_count + 1, &node->children_tree) == NULL) {
-                return errno;
             }
 
             bt_insert(&node->children_tree, pack->all_nodes[child_index], (BtInsertCmpFn) _compare_node_names);
@@ -1037,69 +1039,79 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
 
         return 0;
     } else if (node->type == PACK_NODE_TYPE_DIRECTORY) {
-        int rc = 0xDEADBEEF;
+        char *base_running_path = NULL;
 
+        if (running_path != NULL) {
+            base_running_path = strdup(running_path);
+        } else {
+            size_t brp_len_s = strlen(pack_ns) + 2;
+            base_running_path = malloc(brp_len_s);
+            snprintf(base_running_path, brp_len_s, "%s%c", pack_ns, ARP_NAMESPACE_DELIMITER);
+        }
+
+        int rc = 0xDEADBEEF;
         // honestly I can't think of a sensible use case for having 65536 direct children in a directory
         //TODO: would be nice to abstract this into some sort of bt_iterator object
         stack_t *bt_stack = stack_create(sizeof(void*), 512, 65536);
 
-        if ((rc = stack_push(bt_stack, node->children_tree.root)) != 0) {
+        if ((rc = stack_push(bt_stack, &node->children_tree.root)) != 0) {
             return rc;
         }
 
-        bt_node_t *cur;
-        while ((cur = stack_pop(bt_stack)) != NULL) {
-
+        bt_node_t **cur_ptr;
+        while ((cur_ptr = (bt_node_t**) stack_pop(bt_stack)) != NULL) {
+            bt_node_t *cur = *cur_ptr;
             node_desc_t *child = (node_desc_t*) cur->data;
 
-            char *new_running_path = NULL;
-
-            if (strlen(child->name) > 0) {
-                size_t new_rp_len_s = strlen(running_path) + 1 + strlen(child->name);
-                size_t new_rp_len_b = new_rp_len_s + 1;
-
-                if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
-                    libarp_set_error("malloc failed");
-                    return ENOMEM;
-                }
-
-                snprintf(new_running_path, new_rp_len_b, "%s%s%c", running_path, child->name, ARP_PATH_DELIMITER);
-            } else {
-                if (running_path != NULL) {
-                    libarp_set_error("Non-root node has empty name");
-                    return -1;
-                }
-
-                size_t new_rp_len_s = strlen(pack_ns) + 1;
-                size_t new_rp_len_b = new_rp_len_s + 1;
-
-                if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
-                    libarp_set_error("malloc failed");
-                    return ENOMEM;
-                }
-
-                snprintf(new_running_path, new_rp_len_b, "%s%c", pack_ns, ARP_NAMESPACE_DELIMITER);
+            if (child == NULL) {
+                continue;
             }
 
-            rc = _list_node_contents(child, pack_ns, new_running_path, info_arr, cur_off);
+            char *new_running_path = base_running_path;
 
-            free(new_running_path);
+            if (child->name != NULL && strlen(child->name) > 0) {
+                if (child->type == PACK_NODE_TYPE_DIRECTORY) {
+                    char *child_name = child->name != NULL ? child->name : "";
+
+                    size_t new_rp_len_s = strlen(base_running_path) + 1 + strlen(child_name);
+                    size_t new_rp_len_b = new_rp_len_s + 1;
+
+                    if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
+                        libarp_set_error("malloc failed");
+                        return ENOMEM;
+                    }
+
+                    snprintf(new_running_path, new_rp_len_b, "%s%s%c", base_running_path, child_name,
+                            ARP_PATH_DELIMITER);
+                }
+            }
+
+            rc = _list_node_contents(child, pack_ns, new_running_path,
+                    info_arr, cur_off);
+
+            if (new_running_path != base_running_path) {
+                free(new_running_path);
+            }
 
             if (rc != 0) {
                 return rc;
             }
             
             if (cur->l != NULL) {
-                if ((rc = stack_push(bt_stack, cur->l)) != 0) {
+                if ((rc = stack_push(bt_stack, &cur->l)) != 0) {
                     return rc;
                 }
             }
 
             if (cur->r != NULL) {
-                if ((rc = stack_push(bt_stack, cur->r)) != 0) {
+                if ((rc = stack_push(bt_stack, &cur->r)) != 0) {
                     return rc;
                 }
             }
+        }
+
+        if (base_running_path != running_path) {
+            free(base_running_path);
         }
 
         return 0;

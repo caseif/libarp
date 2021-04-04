@@ -70,6 +70,7 @@ void bt_insert(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn) {
         tree->root = new_node;
         new_node->parent = NULL;
     } else {
+        //printf("insert into %p\n", tree->root);
         bt_node_t *cur = tree->root;
 
         while (true) {

@@ -1009,7 +1009,23 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         unsigned char cur_node_buf[NODE_DESC_MAX_LEN];
         memset(cur_node_buf, 0, sizeof(cur_node_buf));
 
-        memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &node->type, NODE_DESC_TYPE_LEN);
+        char arp_type_ordinal = 0;
+        switch (node->type) {
+            case FS_NODE_TYPE_FILE: {
+                arp_type_ordinal = PACK_NODE_TYPE_RESOURCE;
+                break;
+            }
+            case FS_NODE_TYPE_DIR: {
+                arp_type_ordinal = PACK_NODE_TYPE_DIRECTORY;
+                break;
+            }
+            default: {
+                fprintf(stderr, "Encountered unrecognized node type %d\n", node->type);
+                assert(false);
+            }
+        }
+
+        memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &arp_type_ordinal, NODE_DESC_TYPE_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PART_OFF), &node->part, NODE_DESC_PART_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_OFF_OFF), &node->data_off, NODE_DESC_DATA_OFF_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_LEN_OFF), &node->data_len, NODE_DESC_DATA_LEN_LEN);
@@ -1018,8 +1034,12 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UC_DATA_LEN_OFF), &node->size, NODE_DESC_UC_DATA_LEN_LEN);
         }
         memcpy(offset_ptr(cur_node_buf, NODE_DESC_CRC_OFF), &node->crc, NODE_DESC_CRC_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_NAME_LEN_OFF), &name_len_s,
+
+        // root node must have empty name in package
+        size_t real_name_len_s = i == 0 ? 0 : name_len_s;
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_NAME_LEN_OFF), &real_name_len_s,
                 NODE_DESC_NAME_LEN_LEN);
+
         if (node->type != FS_NODE_TYPE_DIR) {
             copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_EXT_LEN_OFF), &ext_len_s,
                     NODE_DESC_EXT_LEN_LEN);
@@ -1029,8 +1049,11 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
         size_t desc_len = NODE_DESC_BASE_LEN;
 
-        memcpy(offset_ptr(cur_node_buf, desc_len), node->file_stem, name_len_s);
-        desc_len += name_len_s;
+        // again, don't copy name of root node
+        if (i > 0) {
+            memcpy(offset_ptr(cur_node_buf, desc_len), node->file_stem, name_len_s);
+            desc_len += name_len_s;
+        }
 
         if (node->type != FS_NODE_TYPE_DIR) {
             memcpy(offset_ptr(cur_node_buf, desc_len), node->file_ext, ext_len_s);
