@@ -92,8 +92,8 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x52` | `0x4` | Directory Count | The number of directories contained by the catalogue. |
 | `0x56` | `0x4` | Resource Count | The number of resources contained by the catalogue. |
 | `0x5A`| `0x8` | Body Offset | The offset in bytes of the body section of the first part, starting from the beginning of the package header. |
-| `0x64`| `0x8` | Body Size | The length in bytes of the body section of the first part. |
-| `0x6C` | `0x94` | Reserved | Reserved for future use. |
+| `0x62`| `0x8` | Body Size | The length in bytes of the body section of the first part. |
+| `0x6A` | `0x96` | Reserved | Reserved for future use. |
 
 The package namespace may not contain the characters `/` (forward slash), `\` (back slash), `:` (colon), , nor any
 control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
