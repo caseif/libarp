@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +8,7 @@
 #include "internal/stack.h"
 #include "internal/util.h"
 
-stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max) {
+stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack_t *storage) {
     if (el_len == 0) {
         libarp_set_error("Element length must not be 0");
         return NULL;
@@ -29,9 +30,15 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max) {
     }
 
     stack_t *stack = NULL;
-    if ((stack = (stack_t*) malloc(sizeof(stack_t))) == NULL) {
-        libarp_set_error("malloc failed");
-        return NULL;
+    if (storage != NULL) {
+        stack = storage;
+        stack->malloced = false;
+    } else {
+        if ((stack = (stack_t*) malloc(sizeof(stack_t))) == NULL) {
+            libarp_set_error("malloc failed");
+            return NULL;
+        }
+        stack->malloced = true;
     }
 
     if ((stack->data = malloc(el_len * cap_increment)) == NULL) {
@@ -52,7 +59,9 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max) {
 
 void stack_free(stack_t *stack) {
     free(stack->data);
-    free(stack);
+    if (stack->malloced) {
+        free(stack);
+    }
 }
 
 int stack_push(stack_t *stack, void *data) {
@@ -85,4 +94,8 @@ void *stack_pop(stack_t *stack) {
     stack->index -= 1;
 
     return (void*) ((uintptr_t) stack->data + (stack->index * stack->el_len));
+}
+
+void stack_clear(stack_t *stack) {
+    stack->index = 0;
 }

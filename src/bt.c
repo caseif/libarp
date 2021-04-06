@@ -45,6 +45,7 @@ binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out) {
     tree->capacity = capacity;
     tree->count = 0;
     tree->root = NULL;
+    stack_create(sizeof(void*), tree->capacity, tree->capacity, &tree->it_stack);
 
     return tree;
 }
@@ -117,4 +118,31 @@ void *bt_find(const binary_tree_t *tree, const void *needle, BtFindCmpFn cmp_fn)
     }
 
     return NULL;
+}
+
+void **bt_iterate(binary_tree_t *tree) {
+    bt_node_t **next_ptr = stack_pop(&tree->it_stack);
+
+    if (next_ptr == NULL) {
+        return NULL;
+    } else {
+        bt_node_t *next = *next_ptr;
+
+        if (next->l != NULL) {
+            stack_push(&tree->it_stack, &next->l);
+        }
+        if (next->r != NULL) {
+            stack_push(&tree->it_stack, &next->r);
+        }
+
+        return &next->data;
+    }
+}
+
+void bt_reset_iterator(binary_tree_t *tree) {
+    stack_clear(&tree->it_stack);
+
+    if (tree->root != NULL) {
+        stack_push(&tree->it_stack, &tree->root);
+    }
 }

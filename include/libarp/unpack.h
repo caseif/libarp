@@ -10,6 +10,7 @@
 #pragma once
 
 #include "libarp/common.h"
+#include "libarp/iterator.h"
 
 #include <stdlib.h>
 
@@ -22,5 +23,7 @@ int unload_package(ArgusPackage package);
 arp_resource_t *load_resource(ConstArgusPackage package, const char *path);
 
 void unload_resource(arp_resource_t *resource);
+
+int unpack_arp_to_fs(ConstArgusPackage package, const char *target_dir);
 
 int list_resources(ConstArgusPackage package, arp_resource_info_t **info_out, size_t *count_out);

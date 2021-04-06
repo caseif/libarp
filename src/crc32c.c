@@ -23,7 +23,7 @@
 #endif
 
 #define CRC_LOOKUP_TABLE_SIZE 256U
-#define CRC_INITIAL 0xFFFFFFFF
+#define CRC_INITIAL_INV 0
 
 #define BITS_PER_BYTE 8U
 #define BYTES_PER_U64 8U
@@ -85,15 +85,17 @@ static inline uint32_t _sw_crc32c(uint32_t initial, const void *data, size_t len
 }
 
 uint32_t crc32c_cont(uint32_t initial, const void *data, size_t len) {
+    uint32_t real_initial = ~initial;
+
     #ifdef ARCH_X64
     if (_is_sse42_supported()) {
-        return _x86_crc32c(initial, data, len);
+        return _x86_crc32c(real_initial, data, len);
     }
     #endif
 
-    return _sw_crc32c(initial, data, len);
+    return _sw_crc32c(real_initial, data, len);
 }
 
 uint32_t crc32c(const void *data, size_t len) {
-    return crc32c_cont(CRC_INITIAL, data, len);
+    return crc32c_cont(CRC_INITIAL_INV, data, len);
 }

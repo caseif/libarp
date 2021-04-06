@@ -161,7 +161,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         file_base = real_path;
     }
     #else
-    if ((file_base = strrchr(real_path, '/')) != NULL) {
+    if ((file_base = strrchr(real_path, FS_PATH_DELIMITER)) != NULL) {
         file_base += 1;
     } else {
         file_base = real_path;
@@ -521,8 +521,6 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     FILE *package_file = fopen(path, "r");
 
     if (package_file == NULL) {
-        fclose(package_file);
-
         libarp_set_error("Failed to open package file");
         return -1;
     }
@@ -730,21 +728,28 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **data_out) {
+static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **data_out, FILE *part) {
     if (node->part_index > pack->total_parts) {
         libarp_set_error("Node part index is invalid");
         return -1;
     }
 
-    FILE *part_file = fopen(pack->part_paths[node->part_index - 1], "r");
-    if (part_file == NULL) {
-        libarp_set_error("Failed to open part file");
-        return -1;
+    FILE *part_file = NULL;
+    if (part != NULL) {
+        part_file = part;
+    } else {
+        part_file = fopen(pack->part_paths[node->part_index - 1], "rb");
+        if (part_file == NULL) {
+            libarp_set_error("Failed to open part file");
+            return -1;
+        }
     }
 
     stat_t part_stat;
     if (fstat(fileno(part_file), &part_stat) != 0) {
-        fclose(part_file);
+        if (part == NULL) {
+            fclose(part_file);
+        }
 
         libarp_set_error("Failed to stat part file");
         return -1;
@@ -759,23 +764,36 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
 
     void *raw_data = NULL;
     if ((raw_data = malloc(node->data_len)) == NULL) {
-        fclose(part_file);
+        if (part == NULL) {
+            fclose(part_file);
+        }
 
         libarp_set_error("malloc failed");
         return ENOMEM;
     }
 
-    fseek(part_file, PACKAGE_PART_HEADER_LEN + node->data_off, SEEK_SET);
+    size_t part_body_start = 0;
+    if (node->part_index == 1) {
+        part_body_start = pack->body_off;
+    } else {
+        part_body_start = PACKAGE_PART_HEADER_LEN;
+    }
+
+    fseek(part_file, part_body_start + node->data_off, SEEK_SET);
 
     if ((fread(raw_data, node->data_len, 1, part_file)) != 1) {
         free(raw_data);
-        fclose(part_file);
+        if (part == NULL) {
+            fclose(part_file);
+        }
 
         libarp_set_error("Failed to read from part file");
         return -1;
     }
 
-    fclose(part_file);
+    if (part == NULL) {
+        fclose(part_file);
+    }
 
     uint32_t real_crc = crc32c(raw_data, node->data_len);
     if (real_crc != node->crc) {
@@ -967,7 +985,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
 
     void *data = NULL;
     int rc = 0;
-    if ((rc = _load_node_data(real_pack, cur_node, &data)) != 0) {
+    if ((rc = _load_node_data(real_pack, cur_node, &data, NULL)) != 0) {
         return NULL;
     }
 
@@ -999,6 +1017,133 @@ void unload_resource(arp_resource_t *resource) {
     ((node_desc_t*) resource->extra)->loaded_data = NULL;
 
     free(resource);
+}
+
+int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const char *cur_dir,
+        uint16_t *last_part_index, FILE **last_part);
+
+int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const char *cur_dir,
+        uint16_t *last_part_index, FILE **last_part) {
+    if (node->type == PACK_NODE_TYPE_DIRECTORY) {
+        size_t new_dir_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1;
+        size_t new_dir_len_b = new_dir_len_s + 1;
+
+        char *new_dir;
+
+        if (node->index == 0) {
+            new_dir = strdup(cur_dir);
+        } else {
+            if ((new_dir = malloc(new_dir_len_b)) == NULL) {
+                libarp_set_error("malloc failed");
+                return ENOMEM;
+            }
+
+            snprintf(new_dir, new_dir_len_b, "%s%c%s", cur_dir, FS_PATH_DELIMITER, node->name);
+        }
+        
+        stat_t dir_stat;
+        if (stat(new_dir, &dir_stat) != 0) {
+            if (errno = ENOENT) {
+                if (mkdir(new_dir, 0755) != 0) {
+                    char err_msg[ERR_MSG_MAX_LEN];
+                    snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to create directory (rc: %d)", errno);
+                    libarp_set_error(err_msg);
+                    return errno;
+                }
+            } else {
+                char err_msg[ERR_MSG_MAX_LEN];
+                snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat directory (rc: %d)", errno);
+                libarp_set_error(err_msg);
+                return errno;
+            }
+        }
+
+        node_desc_t **child_ptr = NULL;
+        bt_reset_iterator(&node->children_tree);
+        while ((child_ptr = (node_desc_t**) bt_iterate(&node->children_tree)) != NULL) {
+            int rc = _unpack_node_to_fs(pack, *child_ptr, new_dir, last_part_index, last_part);
+            if (rc != 0) {
+                return rc;
+            }
+        }
+
+        free(new_dir);
+
+        return 0;
+    } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
+        if (node->part_index == 0 || node->part_index > pack->total_parts) {
+            libarp_set_error("Node part index is invalid");
+            return -1;
+        }
+
+        if (*last_part != NULL && node->part_index != *last_part_index) {
+            fclose(*last_part);
+        }
+
+        if (node->part_index != *last_part_index) {
+            *last_part_index = node->part_index;
+            if ((*last_part = fopen(pack->part_paths[node->part_index - 1], "rb")) == NULL) {
+                libarp_set_error("Failed to open part file\n");
+                return errno;
+            }
+        }
+
+        void *res_data = NULL;
+        if ((res_data = malloc(node->data_uc_len)) == NULL) {
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+
+        _load_node_data(pack, node, &res_data, *last_part);
+
+        size_t res_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1 + node->ext_len_s;
+        size_t res_path_len_b = res_path_len_s + 1;
+
+        char *res_path;
+        if ((res_path = malloc(res_path_len_b)) == NULL) {
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+
+        snprintf(res_path, res_path_len_b, "%s%c%s%c%s", cur_dir, FS_PATH_DELIMITER, node->name, '.', node->ext);
+
+        FILE *res_file = NULL;
+        if ((res_file = fopen(res_path, "w+b")) == NULL) {
+            libarp_set_error("Failed to open output file for resource");
+            return errno;
+        }
+
+        if (fwrite(res_data, node->data_len, 1, res_file) != 1) {
+            libarp_set_error("Failed to write to output file");
+            return errno;
+        }
+
+        fclose(res_file);
+
+        return 0;
+    } else {
+        assert(false);
+    }
+}
+
+int unpack_arp_to_fs(ConstArgusPackage package, const char *target_dir) {
+    const argus_package_t *real_pack = (const argus_package_t*) package;
+
+    if (real_pack->node_count == 0) {
+        libarp_set_error("Package does not contain any nodes");
+        return -1;
+    }
+
+    FILE *last_part = NULL;
+    uint16_t last_part_index = 0;
+
+    int rc = _unpack_node_to_fs(real_pack, real_pack->all_nodes[0], target_dir, &last_part_index, &last_part);
+
+    if (last_part != NULL) {
+        fclose(last_part);
+    }
+
+    return rc;
 }
 
 int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path, arp_resource_info_t *info_arr,
@@ -1050,18 +1195,11 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
         }
 
         int rc = 0xDEADBEEF;
-        // honestly I can't think of a sensible use case for having 65536 direct children in a directory
-        //TODO: would be nice to abstract this into some sort of bt_iterator object
-        stack_t *bt_stack = stack_create(sizeof(void*), 512, 65536);
 
-        if ((rc = stack_push(bt_stack, &node->children_tree.root)) != 0) {
-            return rc;
-        }
-
-        bt_node_t **cur_ptr;
-        while ((cur_ptr = (bt_node_t**) stack_pop(bt_stack)) != NULL) {
-            bt_node_t *cur = *cur_ptr;
-            node_desc_t *child = (node_desc_t*) cur->data;
+        node_desc_t **child_ptr;
+        bt_reset_iterator(&node->children_tree);
+        while ((child_ptr = (node_desc_t**) bt_iterate(&node->children_tree)) != NULL) {
+            node_desc_t *child = *child_ptr;
 
             if (child == NULL) {
                 continue;
@@ -1095,18 +1233,6 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
 
             if (rc != 0) {
                 return rc;
-            }
-            
-            if (cur->l != NULL) {
-                if ((rc = stack_push(bt_stack, &cur->l)) != 0) {
-                    return rc;
-                }
-            }
-
-            if (cur->r != NULL) {
-                if ((rc = stack_push(bt_stack, &cur->r)) != 0) {
-                    return rc;
-                }
             }
         }
 

@@ -924,6 +924,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                     crc = crc32c_cont(crc, copy_buffer, read_bytes);
                 } else {
                     crc = crc32c(copy_buffer, read_bytes);
+                    began_crc = true;
                 }
                 //TODO: handle compression
 

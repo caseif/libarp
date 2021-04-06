@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "internal/stack.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -29,6 +31,8 @@ typedef struct BinaryTree {
     bt_node_t *root;
     bt_node_t *storage;
     bool malloced;
+
+    stack_t it_stack;
 } binary_tree_t;
 
 typedef int (*BtInsertCmpFn)(const void *a, const void *b);
@@ -42,3 +46,7 @@ void bt_free(binary_tree_t *tree);
 void bt_insert(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn);
 
 void *bt_find(const binary_tree_t *tree, const void *needle, BtFindCmpFn cmp_fn);
+
+void **bt_iterate(binary_tree_t *tree);
+
+void bt_reset_iterator(binary_tree_t *tree);

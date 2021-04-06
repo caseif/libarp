@@ -25,40 +25,37 @@
     #define S_ISREG(mode) (mode & S_IFREG)
 
     #define TEMP_PATH "C:\\Temp"
-#elif defined __APPLE__
+
+    #define FS_PATH_DELIMITER '\\'
+#else
     #include <dirent.h>
+
+    #define FS_PATH_DELIMITER '/'
+
+    #define stat_t struct stat
+#if defined __APPLE__
     #include <mach-o/dyld.h>
     #include <sys/syslimits.h>
 
-    #define stat_t struct stat
-
     #define TEMP_PATH "/tmp"
 #elif defined __linux__
-    #include <dirent.h>
     #include <features.h>
     #include <unistd.h>
     #include <linux/limits.h>
 
-    #define stat_t struct stat
-
     #define TEMP_PATH "/tmp"
 #elif defined __NetBSD__ || defined __DragonFly__
-    #include <dirent.h>
     #include <unistd.h>
     #include <sys/param.h>
     #include <sys/syslimits.h>
 
-    #define stat_t struct stat
-
     #define TEMP_PATH "/tmp"
 #elif defined __FreeBSD__
-    #include <dirent.h>
     #include <sys/sysctl.h>
     #include <sys/syslimits.h>
-
-    #define stat_t struct stat
 
     #define TEMP_PATH "/tmp"
 #else
     #error "This OS is not supported at this time."
+#endif
 #endif
