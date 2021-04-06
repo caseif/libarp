@@ -10,7 +10,6 @@
 #pragma once
 
 #include "libarp/common.h"
-#include "libarp/iterator.h"
 
 #include <stdlib.h>
 

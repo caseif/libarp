@@ -962,8 +962,8 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     }
 
     // should be at terminal component now
-    bt_node_t *found = bt_find(&cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
-    if (found == NULL) {
+    cur_node = bt_find(&cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
+    if (cur_node == NULL) {
         free(path_copy);
 
         libarp_set_error("Resource does not exist at the specified path");
@@ -971,8 +971,6 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     }
 
     free(path_copy);
-
-    cur_node = (node_desc_t*) found->data;
 
     if (cur_node->type == PACK_NODE_TYPE_DIRECTORY) {
         libarp_set_error("Requested path points to directory");
@@ -996,6 +994,11 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         libarp_set_error("malloc failed");
         return NULL;
     }
+
+    res->info.base_name = cur_node->name;
+    res->info.extension = cur_node->ext;
+    res->info.media_type = cur_node->media_type;
+    res->info.path = NULL;
 
     res->data = data;
     res->len = cur_node->data_len;
