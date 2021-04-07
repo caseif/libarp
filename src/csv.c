@@ -8,6 +8,7 @@
  */
 
 #include "internal/bt.h"
+#include "internal/common_util.h"
 #include "internal/csv.h"
 #include "internal/package_defines.h"
 #include "internal/util.h"
@@ -17,8 +18,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static int _csv_insert_cmp(const void *a, const void *b) {
     const char *csv_line_a = (char*) a;

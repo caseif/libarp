@@ -11,6 +11,7 @@
 #include "libarp/unpack.h"
 #include "internal/bt.h"
 #include "internal/common_util.h"
+#include "internal/compression.h"
 #include "internal/crc32c.h"
 #include "internal/file_defines.h"
 #include "internal/package_defines.h"
@@ -42,11 +43,6 @@
 #include <immintrin.h>
 #include <sys/mman.h>
 #endif
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
-#define CHUNK_LEN 262144 // 256K
 
 #define VAR_STR_BUF_LEN 256
 
@@ -806,101 +802,27 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
     void *final_data = NULL;
 
     if (pack->compression_type[0] != '\0') {
+        void *decompressed_data = NULL;
+        int rc = 0xDEADBEEF;
+
         if (strcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-            int rc = (int) 0xDEADBEEF;
-
-            z_stream defl_stream;
-            defl_stream.zalloc = Z_NULL;
-            defl_stream.zfree = Z_NULL;
-            defl_stream.opaque = Z_NULL;
-            defl_stream.avail_in = 0;
-            defl_stream.next_in = Z_NULL;
-            
-            if ((rc = inflateInit(&defl_stream)) != Z_OK) {
-                free(raw_data);
-
-                libarp_set_error("zlib inflateInit failed");
-                return -1;
-            }
-
-            void *inflated_data = NULL;
-            if ((inflated_data = malloc(node->data_uc_len)) == NULL) {
-                free(raw_data);
-
-                libarp_set_error("malloc failed");
-                return ENOMEM;
-            }
-
-            size_t remaining = node->data_len;
-            size_t bytes_decompressed = 0;
-            void *data_window = raw_data;
-
-            unsigned char dfl_out_buf[CHUNK_LEN];
-
-            while (remaining > 0) {
-                size_t to_read = MIN(remaining, CHUNK_LEN);
-
-                defl_stream.avail_in = to_read;
-                defl_stream.next_in = data_window;
-
-                remaining -= to_read;
-                data_window = (void*) ((uintptr_t) data_window + to_read);
-
-                while (defl_stream.avail_out == 0) {
-                    defl_stream.avail_out = CHUNK_LEN;
-                    defl_stream.next_out = dfl_out_buf;
-
-                    rc = inflate(&defl_stream, Z_NO_FLUSH);
-                    switch (rc) {
-                        case Z_STREAM_END:
-                            goto end_inflate_loop; // ew
-                        case Z_STREAM_ERROR:
-                        case Z_NEED_DICT:
-                        case Z_DATA_ERROR:
-                        case Z_MEM_ERROR:
-                        default:
-                            inflateEnd(&defl_stream);
-                            free(inflated_data);
-                            free(raw_data);
-
-                            libarp_set_error("zlib inflate failed");
-                            return -1;
-                    }
-
-                    size_t got_len = CHUNK_LEN - defl_stream.avail_out;
-
-                    if (bytes_decompressed + got_len > node->data_uc_len) {
-                        inflateEnd(&defl_stream);
-                        free(inflated_data);
-                        free(raw_data);
-
-                        libarp_set_error("Decompressed data exceeds expected length");
-                        return -1;
-                    }
-
-                    memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
-                    bytes_decompressed += got_len;
-                }
-            }
-            
-            end_inflate_loop:
-            inflateEnd(&defl_stream);
-            free(raw_data);
-
-            if (rc != Z_STREAM_END) {
-                free(inflated_data);
-
-                libarp_set_error("DEFLATE stream is incomplete");
-                return -1;
-            }
-
-            final_data = inflated_data;
+            rc = decompress_deflate(raw_data, node->data_len, node->data_uc_len, &decompressed_data);
         } else {
             free(raw_data);
 
             libarp_set_error("Unrecognized compression magic");
             return -1;
         }
+
+        free(raw_data);
+
+        if (rc != 0) {
+            return rc;
+        }
+
+        *data_out = decompressed_data;
+
+        return 0;
     } else {
         final_data = raw_data;
     }
