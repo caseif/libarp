@@ -514,27 +514,28 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 }
 
 int load_package_from_file(const char *path, ArgusPackage *package) {
-    FILE *package_file = fopen(path, "r");
-
-    if (package_file == NULL) {
-        libarp_set_error("Failed to open package file");
-        return -1;
+    stat_t package_file_stat;
+    if (stat(path, &package_file_stat) != 0) {
+        libarp_set_error("Failed to stat package file");
+        return EINVAL;
     }
 
-    stat_t package_file_stat;
-    if (fstat(fileno(package_file), &package_file_stat) != 0) {
-        fclose(package_file);
-
-        libarp_set_error("Failed to stat package file");
-        return -1;
+    if (!S_ISREG(package_file_stat.st_mode) && !S_ISLNK(package_file_stat.st_mode)) {
+        libarp_set_error("Source path must be regular file or symlink");
+        return EINVAL;
     }
 
     size_t package_file_size = package_file_stat.st_size;
 
     if (package_file_size < PACKAGE_HEADER_LEN) {
-        fclose(package_file);
-
         libarp_set_error("File is too small to contain package header");
+        return -1;
+    }
+
+    FILE *package_file = fopen(path, "r");
+
+    if (package_file == NULL) {
+        libarp_set_error("Failed to open package file");
         return -1;
     }
 
