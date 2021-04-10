@@ -21,7 +21,7 @@ typedef struct ArpPackingOptions {
     char *pack_name;
     char *pack_namespace;
     size_t max_part_len;
-    char *compression_type;
+    char compression_type[PACKAGE_COMPRESSION_LEN + 1];
     char *media_types_path;
 } arp_packing_options_t;
 
@@ -37,7 +37,7 @@ typedef struct FsNode {
 
     uint64_t index;
     uint16_t part;
-    uint64_t data_len;
+    uint64_t packed_data_len;
     uint64_t data_off;
     uint32_t crc;
 } fs_node_t;

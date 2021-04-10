@@ -8,8 +8,10 @@
  */
 
 #include "libarp/common.h"
+#include "libarp/defines.h"
 #include "libarp/pack.h"
 #include "internal/common_util.h"
+#include "internal/compression.h"
 #include "internal/crc32c.h"
 #include "internal/csv.h"
 #include "internal/file_defines.h"
@@ -41,7 +43,6 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
         const char *compression_type, const char *media_types_path) {
     size_t name_len_s = strlen(pack_name);
     size_t namespace_len_s = strlen(pack_namespace);
-    size_t compression_type_len_s = compression_type != NULL ? strlen(compression_type) : 0;
     size_t media_types_path_len_s = media_types_path != NULL ? strlen(media_types_path) : 0;
 
     if (name_len_s == 0) {
@@ -59,11 +60,6 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
         return NULL;
     }
 
-    if (compression_type_len_s != 0 && compression_type_len_s != PACKAGE_COMPRESSION_LEN) {
-        libarp_set_error("Compression type magic length is incorrect");
-        return NULL;
-    }
-
     if (max_part_len != 0 && max_part_len < PACKAGE_MIN_PART_LEN) {
         libarp_set_error("Max part length is too small");
         return NULL;
@@ -72,15 +68,22 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     arp_packing_options_t *opts = calloc(1, sizeof(arp_packing_options_t));
     opts->pack_name = calloc(1, name_len_s + 1);
     opts->pack_namespace = calloc(1, PACKAGE_NAMESPACE_LEN + 1);
-    opts->compression_type = compression_type_len_s > 0 ? calloc(1, PACKAGE_COMPRESSION_LEN + 1) : NULL;
+    opts->compression_type[0] = '\0';
     opts->media_types_path = media_types_path_len_s > 0 ? calloc(1, media_types_path_len_s + 1) : NULL;
 
     memcpy(opts->pack_name, pack_name, name_len_s + 1);
     memcpy(opts->pack_namespace, pack_namespace, namespace_len_s + 1);
-    if (compression_type != NULL) {
-        memcpy(opts->compression_type, compression_type, compression_type_len_s + 1);
+    if (compression_type != NULL && strlen(compression_type) > 0) {
+        char *compress_magic;
+        if (strcmp(compression_type, ARP_COMPRESS_TYPE_DEFLATE) == 0) {
+            compress_magic = ARP_COMPRESS_MAGIC_DEFLATE;
+        } else {
+            libarp_set_error("Unrecognized compression type");
+            return NULL;
+        }
+        memcpy(opts->compression_type, compress_magic, sizeof(opts->compression_type));
     }
-    if (media_types_path != NULL) {
+    if (media_types_path != NULL && strlen(media_types_path) > 0) {
         memcpy(opts->media_types_path, media_types_path, media_types_path_len_s + 1);
     }
 
@@ -640,8 +643,6 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
             sizes->part_count += 1;
         }
 
-        sizes->body_lens[sizes->part_count - 1] += node_stat.st_size;
-
         sizes->node_count += 1;
         sizes->resource_count += 1;
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
@@ -810,7 +811,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             bool began_crc = false;
 
             if (node->children_count == 0) {
-                node->data_len = 0;
+                node->packed_data_len = 0;
                 node->crc = ~0;
             }
 
@@ -836,8 +837,9 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                         crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
                         began_crc = true;
                     }
+
                     //TODO: handle compression
-                    
+
                     dir_list_index = 0;
                     body_off += sizeof(dir_listing_buffer);
                     dir_data_len += sizeof(dir_listing_buffer);
@@ -860,13 +862,14 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 } else {
                     crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
                 }
+
                 //TODO: handle compression
 
                 body_off += write_bytes;
                 dir_data_len += write_bytes;
             }
 
-            node->data_len = dir_data_len;
+            node->packed_data_len = dir_data_len;
             node->crc = crc;
         } else if (node->type == FS_NODE_TYPE_FILE || node->type == FS_NODE_TYPE_LINK) {
             stat_t node_stat;
@@ -906,12 +909,56 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             uint32_t crc = 0;
             bool began_crc = false;
 
-            size_t data_len = 0;
+            size_t packed_data_len = 0;
+            size_t raw_data_len = 0;
+
+            void *compress_handle;
+
+            if (strlen(opts->compression_type) > 0) {
+                if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
+                    compress_handle = compress_deflate_init(cur_node_size);
+                } else {
+                    assert(false);
+                }
+            }
 
             size_t read_bytes = 0;
             clearerr(cur_node_file);
+            size_t remaining = cur_node_size;
             while ((read_bytes = fread(copy_buffer, 1, COPY_BUFFER_LEN, cur_node_file)) > 0) {
-                if (fwrite(copy_buffer, read_bytes, 1, cur_part_file) != 1) {
+                if (read_bytes > remaining) {
+                    libarp_set_error("File size changed while reading");
+                    return -1;
+                }
+
+                remaining -= read_bytes;
+
+                void *processed_chunk = copy_buffer;
+                size_t to_write = read_bytes;
+
+                if (strlen(opts->compression_type) > 0) {
+                    if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
+                        compress_deflate(compress_handle, copy_buffer, read_bytes,
+                                &processed_chunk, &to_write);
+                    } else {
+                        assert(false);
+                    }
+                }
+
+                if (began_crc) {
+                    crc = crc32c_cont(crc, processed_chunk, to_write);
+                } else {
+                    crc = crc32c(processed_chunk, to_write);
+                    began_crc = true;
+                }
+
+                size_t written = fwrite(processed_chunk, to_write, 1, cur_part_file);
+
+                if (processed_chunk != copy_buffer) {
+                    free(processed_chunk);
+                }
+
+                if (written != 1) {
                     fclose(cur_part_file);
                     free(cur_part_path);
                     _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
@@ -920,19 +967,24 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                     return -1;
                 }
 
-                if (began_crc) {
-                    crc = crc32c_cont(crc, copy_buffer, read_bytes);
-                } else {
-                    crc = crc32c(copy_buffer, read_bytes);
-                    began_crc = true;
-                }
-                //TODO: handle compression
+                body_off += to_write;
+                packed_data_len += to_write;
+                raw_data_len += read_bytes;
 
-                body_off += read_bytes;
-                data_len += read_bytes;
+                if (remaining == 0) {
+                    break;
+                }
             }
 
-            if (!feof(cur_node_file)) {
+            if (strlen(opts->compression_type) > 0) {
+                if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
+                    compress_deflate_finish(compress_handle);
+                } else {
+                    assert(false);
+                }
+            }
+
+            if (ferror(cur_node_file)) {
                 fclose(cur_part_file);
                 free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
@@ -945,14 +997,13 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             fclose(cur_node_file);
 
             node->crc = crc;
-            node->data_len = data_len; //TODO: account for compression
+            node->packed_data_len = packed_data_len;
         } else {
             node->data_off = body_off;
-            node->data_len = 0;
+            node->packed_data_len = 0;
             // just skip it
             continue;
         }
-
     }
 
     FILE *first_part_file = NULL;
@@ -1029,7 +1080,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &arp_type_ordinal, NODE_DESC_TYPE_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PART_OFF), &node->part, NODE_DESC_PART_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_OFF_OFF), &node->data_off, NODE_DESC_DATA_OFF_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_LEN_OFF), &node->data_len, NODE_DESC_DATA_LEN_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_LEN_OFF), &node->packed_data_len, NODE_DESC_DATA_LEN_LEN);
         if (opts->compression_type != NULL) {
             //TODO: implement compression
             copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UC_DATA_LEN_OFF), &node->size, NODE_DESC_UC_DATA_LEN_LEN);

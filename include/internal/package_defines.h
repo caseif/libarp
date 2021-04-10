@@ -17,6 +17,8 @@
 
 #define FORMAT_MAGIC "\x1B\x41\x52\x47\x55\x53\x52\x50"
 
+#define ARP_COMPRESS_MAGIC_DEFLATE "df"
+
 #define ENTRY_TYPE_RESOURCE 0
 #define ENTRY_TYPE_DIRECTORY 1
 
