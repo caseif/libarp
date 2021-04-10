@@ -177,7 +177,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         return -1;
     }
 
-    size_t stem_len_s = file_base_len_s - sizeof("." PACKAGE_EXT);
+    size_t stem_len_s = file_base_len_s - strlen("." PACKAGE_EXT);
     size_t stem_len_b = stem_len_s + 1;
     char *file_stem = NULL;
     if ((file_stem = malloc(stem_len_b)) == NULL) {
@@ -213,10 +213,11 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         parent_dir[parent_dir_len_b - 1] = '\0';
     }
 
-    size_t suffix_index = stem_len_b - 1 - sizeof(PACKAGE_PART_1_SUFFIX);
-    if (stem_len_b > sizeof(PACKAGE_PART_1_SUFFIX) - 1
-            && memcmp(file_base + suffix_index, PACKAGE_PART_1_SUFFIX, sizeof(PACKAGE_PART_1_SUFFIX) - 1) == 0) {
-        stem_len_b -= sizeof(PACKAGE_PART_1_SUFFIX);
+    size_t suffix_index = stem_len_s - strlen(PACKAGE_PART_1_SUFFIX);
+    if (stem_len_b > strlen(PACKAGE_PART_1_SUFFIX)
+            && memcmp(file_stem + suffix_index, PACKAGE_PART_1_SUFFIX, strlen(PACKAGE_PART_1_SUFFIX)) == 0) {
+        stem_len_s -= strlen(PACKAGE_PART_1_SUFFIX);
+        stem_len_b = stem_len_s + 1;
         char *file_stem_new = NULL;
         if ((file_stem_new = realloc(file_stem, stem_len_b)) == NULL) {
             free(parent_dir);
@@ -226,6 +227,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
             return -1;
         }
         file_stem = file_stem_new;
+
+        file_stem[stem_len_b - 1] = '\0';
     }
 
     if ((pack->part_paths[0] = malloc(real_path_len_b)) == NULL) {
@@ -237,6 +240,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     }
 
     memcpy(pack->part_paths[0], real_path, real_path_len_b);
+
+    int rc = 0xDEADBEEF;
 
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
@@ -265,6 +270,31 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         }
 
         memcpy(pack->part_paths[i - 1], part_path, part_path_len_b);
+
+        stat_t part_stat;
+        if (stat(part_path, &part_stat) != 0) {
+            libarp_set_error("Failed to stat part file");
+
+            rc = errno;
+            part_err = true;
+            break;
+        }
+
+        if (!S_ISREG(part_stat.st_mode) && !S_ISLNK(part_stat.st_mode)) {
+            libarp_set_error("Part file must be regular file or symlink");
+
+            rc = EINVAL;
+            part_err = EINVAL;
+            break;
+        }
+
+        if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
+            libarp_set_error("Package part file is too small");
+            
+            rc = EINVAL;
+            part_err = true;
+            break;
+        }
         
         FILE *part_file = fopen(part_path, "r");
 
@@ -286,27 +316,12 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
             break;
         }
 
-        stat_t part_stat;
-        if (fstat(fileno(part_file), &part_stat) != 0) {
-            fclose(part_file);
-
-            libarp_set_error("Failed to stat package part file");
-            
-            part_err = true;
-            break;
-        }
-
-        if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
-            fclose(part_file);
-
-            libarp_set_error("Package part file is too small");
-            
-            part_err = true;
-            break;
-        }
-
         unsigned char part_header[PACKAGE_PART_HEADER_LEN];
-        if (fread(part_header, PACKAGE_PART_HEADER_LEN, 1, part_file) != 0) {
+        if (fread(part_header, PACKAGE_PART_HEADER_LEN, 1, part_file) != 1) {
+            rc = ferror(part_file);
+            if (rc == 0) {
+                rc = -1;
+            }
             fclose(part_file);
 
             libarp_set_error("Failed to read package part header");
@@ -320,6 +335,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         if (memcmp(part_header, PART_MAGIC, PART_MAGIC_LEN) != 0) {
             libarp_set_error("Package part magic is invalid");
             
+            rc = EINVAL;
             part_err = true;
             break;
         }
@@ -329,15 +345,16 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         if (part_index != i) {
             libarp_set_error("Package part index is incorrect");
             
+            rc = EINVAL;
             part_err = true;
             break;
         }
     }
-    
+
     free(file_stem);
     free(parent_dir);
 
-    return part_err ? -1 : 0;
+    return part_err ? rc : 0;
 }
 
 static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
@@ -524,7 +541,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     }
 
     if (!S_ISREG(package_file_stat.st_mode) && !S_ISLNK(package_file_stat.st_mode)) {
-        libarp_set_error("Source path must be regular file or symlink");
+        libarp_set_error("Source path must point to regular file or symlink");
         return EINVAL;
     }
 
@@ -740,7 +757,7 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
     } else {
         part_file = fopen(pack->part_paths[node->part_index - 1], "rb");
         if (part_file == NULL) {
-            libarp_set_error("Failed to open part file");
+            libarp_set_error("Failed to open part file for loading");
             return -1;
         }
     }
@@ -1012,7 +1029,7 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
         if (node->part_index != *last_part_index) {
             *last_part_index = node->part_index;
             if ((*last_part = fopen(pack->part_paths[node->part_index - 1], "rb")) == NULL) {
-                libarp_set_error("Failed to open part file");
+                libarp_set_error("Failed to open part file for unpacking");
                 return errno;
             }
         }
