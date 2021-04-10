@@ -205,7 +205,8 @@ static void _free_fs_node(fs_node_ptr node) {
 // annoyingly, the FS APIs are so different between Win32 and POSIX that we need
 // totally separate implementations
 #ifdef _WIN32
-static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res) {
+static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res,
+        bool is_root) {
     WIN32_FIND_DATAA find_data;
 
     HANDLE find_handle = FindFirstFileW(root_path, &find_data);
@@ -218,7 +219,8 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
     } while (FindNextFileW(find_handle, &find_data) != 0);
 }
 #else
-static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res) {
+static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res,
+        bool is_root) {
     static uint8_t recursion_count = 0;
 
     // we only need to do the nesting limit check in this function because once
@@ -233,6 +235,8 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
         libarp_set_error("calloc failed");
         return ENOMEM;
     }
+
+    node->is_root = is_root;
 
     stat_t root_stat;
     if (stat(root_path, &root_stat) != 0) {
@@ -315,7 +319,7 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
                 fs_node_ptr child_node = NULL;
                 recursion_count++;
                 {
-                    int rc = _create_fs_tree(child_full_path, media_types, &child_node);
+                    int rc = _create_fs_tree_impl(child_full_path, media_types, &child_node, false);
                     if (rc != 0) {
                         free(child_full_path);
                         _free_fs_node(node);
@@ -504,6 +508,10 @@ static int _create_fs_tree(const char *root_path, const csv_file_t *media_types,
 }
 #endif
 
+static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res) {
+    return _create_fs_tree_impl(root_path, media_types, res, true);
+}
+
 // forward declaration required for recursive calls
 static size_t _fs_node_count(fs_node_ptr root, bool dirs_only);
 
@@ -611,7 +619,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
         sizes->part_count = 1;
     }
 
-    size_t stem_len_s = strlen(fs_root->file_stem);
+    size_t stem_len_s = fs_root->is_root ? 0 : strlen(fs_root->file_stem);
 
     if (fs_root->type == FS_NODE_TYPE_FILE || fs_root->type == FS_NODE_TYPE_LINK) {
         size_t ext_len_s = 0;
@@ -630,18 +638,25 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
         stat_t node_stat;
         if (stat(fs_root->target_path, &node_stat) != 0) {
             libarp_set_error("stat failed");
-            return -1;
+            return errno;
+        }
+
+        if (max_part_len != 0 && node_stat.st_size > max_part_len) {
+            libarp_set_error("Max part size is smaller than largest resource");
+            return EINVAL;
         }
 
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_stat.st_size;
         if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
-                return -1;
+                return EINVAL;
             }
 
             sizes->part_count += 1;
         }
+
+        sizes->body_lens[sizes->part_count - 1] += node_stat.st_size;
 
         sizes->node_count += 1;
         sizes->resource_count += 1;
@@ -650,6 +665,11 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
 
         size_t node_len = fs_root->children_count * NODE_DESCRIPTOR_INDEX_LEN;
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_len;
+
+        if (max_part_len != 0 && node_len > max_part_len) {
+            libarp_set_error("Max part size is not large enough to store largest directory");
+            return EINVAL;
+        }
 
         if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
@@ -1020,7 +1040,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
         cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
-        if ((first_part_file = fopen(cur_part_path, "wb")) == NULL) {
+        if ((first_part_file = fopen(cur_part_path, "r+b")) == NULL) {
             free(cur_part_path);
             _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
@@ -1042,6 +1062,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
     unsigned char cat_buf[COPY_BUFFER_LEN];
     size_t cat_buf_off = 0;
     for (size_t i = 0; i < important_sizes->node_count; i++) {
+        // flush catalogue buffer if it's going to overflow this iteration
         if (cat_buf_off + NODE_DESC_MAX_LEN > COPY_BUFFER_LEN) {
             if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
                 fclose(first_part_file);

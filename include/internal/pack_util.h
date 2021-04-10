@@ -34,6 +34,7 @@ typedef struct FsNode {
     size_t size;
     struct FsNode **children;
     size_t children_count;
+    bool is_root;
 
     uint64_t index;
     uint16_t part;

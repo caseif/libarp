@@ -64,8 +64,6 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
     int rc = 0xDEADBEEF;
     while (remaining > 0) {
         size_t to_read = MIN(remaining, sizeof(real_stream->in_buf));
-        printf("total: %d | processed: %d | to_read: %d\n", real_stream->total_input_bytes,
-                real_stream->processed_bytes, to_read);
         assert(real_stream->processed_bytes + to_read <= real_stream->total_input_bytes);
         
         real_stream->zlib_stream.avail_in = to_read;
@@ -80,7 +78,6 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
         do {
             int flush = Z_NO_FLUSH;
             if (real_stream->processed_bytes + to_read == real_stream->total_input_bytes) {
-                printf("finish\n");
                 flush = Z_FINISH;
             }
 
