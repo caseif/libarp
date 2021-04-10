@@ -635,18 +635,12 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
 
         sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s + ext_len_s + media_type_len_s;
 
-        stat_t node_stat;
-        if (stat(fs_root->target_path, &node_stat) != 0) {
-            libarp_set_error("stat failed");
-            return errno;
-        }
-
-        if (max_part_len != 0 && node_stat.st_size > max_part_len) {
+        if (max_part_len != 0 && fs_root->size > max_part_len) {
             libarp_set_error("Max part size is smaller than largest resource");
             return EINVAL;
         }
 
-        size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_stat.st_size;
+        size_t new_len = sizes->body_lens[sizes->part_count - 1] + fs_root->size;
         if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
                 libarp_set_error("Part count would exceed maximum");
@@ -656,7 +650,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
             sizes->part_count += 1;
         }
 
-        sizes->body_lens[sizes->part_count - 1] += node_stat.st_size;
+        sizes->body_lens[sizes->part_count - 1] += fs_root->size;
 
         sizes->node_count += 1;
         sizes->resource_count += 1;
