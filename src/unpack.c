@@ -148,6 +148,9 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         return -1;
     }
 
+    size_t real_path_len_s = strlen(real_path);
+    size_t real_path_len_b = real_path_len_s + 1;
+
     const char *file_base = NULL;
 
     #ifdef _WIN32
@@ -225,7 +228,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         file_stem = file_stem_new;
     }
 
-    if ((pack->part_paths[0] = malloc(file_base_len_b)) == NULL) {
+    if ((pack->part_paths[0] = malloc(real_path_len_b)) == NULL) {
         free(parent_dir);
         free(file_stem);
 
@@ -233,7 +236,7 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
         return -1;
     }
 
-    memcpy(pack->part_paths[0], file_base, file_base_len_b);
+    memcpy(pack->part_paths[0], real_path, real_path_len_b);
 
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
@@ -1009,7 +1012,7 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
         if (node->part_index != *last_part_index) {
             *last_part_index = node->part_index;
             if ((*last_part = fopen(pack->part_paths[node->part_index - 1], "rb")) == NULL) {
-                libarp_set_error("Failed to open part file\n");
+                libarp_set_error("Failed to open part file");
                 return errno;
             }
         }
