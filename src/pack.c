@@ -756,6 +756,10 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         return errno;
     }
 
+    important_sizes->part_count = 1;
+
+    memset(important_sizes->body_lens, 0, sizeof(important_sizes->body_lens));
+
     // write node contents
     for (size_t i = 0; i < important_sizes->node_count; i++) {
         // disable lint to remove a very stubborn false positive
@@ -766,7 +770,9 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         if (opts->max_part_len != 0 && new_part_len > opts->max_part_len) {
             fclose(cur_part_file);
 
+            important_sizes->body_lens[cur_part_index] = body_off;
             cur_part_index += 1;
+            important_sizes->part_count += 1;
 
             cur_part_path = _get_part_path(target_dir, opts->pack_name, cur_part_index, false, cur_part_path);
 
