@@ -51,9 +51,11 @@ typedef fs_node_ptr *fs_node_ptr_arr;
 
 typedef struct PackageImportantSizes {
     uint64_t cat_len;
+    uint64_t cat_off;
     uint32_t node_count;
     uint32_t directory_count;
     uint32_t resource_count;
     uint16_t part_count;
+    uint64_t first_body_off;
     uint64_t body_lens[PACKAGE_MAX_PARTS];
 } package_important_sizes_t;

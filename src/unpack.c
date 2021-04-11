@@ -83,54 +83,57 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
 
 static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
-            && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_MAGIC_LEN) != 0) {
+            && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
         libarp_set_error("Package compression type is not supported");
-        return -1;
+        return EINVAL;
     }
 
     if (validate_path_component(pack->package_namespace,
-            MIN(strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN))) {
-        return -1;
+            MIN(strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN)) != 0) {
+        return EINVAL;
     }
 
     if (pack->total_parts < 1 || pack->total_parts > PACKAGE_MAX_PARTS) {
         libarp_set_error("Package part count is invalid");
-        return -1;
+        return EINVAL;
     }
 
     if (pack->node_count == 0) {
         libarp_set_error("Package catalogue is empty");
-        return -1;
+        return EINVAL;
     }
 
     if (pack->resource_count == 0) {
         libarp_set_error("Package does not contain any resources");
-        return -1;
+        return EINVAL;
     }
 
     if (pack->cat_off < PACKAGE_HEADER_LEN) {
         libarp_set_error("Package catalogue offset is too small");
-        return -1;
+        return EINVAL;
     }
 
     if (pack->body_off < PACKAGE_HEADER_LEN) {
         libarp_set_error("Package body offset is too small");
+        return EINVAL;
     }
 
     if (pack->cat_off + pack->cat_len > pack_size) {
         libarp_set_error("Package catalogue offset and length are incorrect");
+        return EINVAL;
     }
 
     if (pack->body_off + pack->body_len > pack_size) {
         libarp_set_error("Package body offset and length are incorrect");
+        return EINVAL;
     }
 
     if (pack->cat_off < pack->body_off && pack->cat_off + pack->cat_len > pack->body_off) {
         libarp_set_error("Package catalogue would overlap body section");
-        return -1;
+        return EINVAL;
     } else if (pack->body_off < pack->cat_off && pack->body_off + pack->body_len > pack->cat_off) {
         libarp_set_error("Body section would overlap package catalogue");
-        return -1;
+        return EINVAL;
     }
 
     return 0;
@@ -523,7 +526,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
 
             if (child_index == 0 || child_index >= pack->node_count) {
                 libarp_set_error("Illegal node index in directory");
-                return -1;
+                return EINVAL;
             }
 
             bt_insert(&node->children_tree, pack->all_nodes[child_index], (BtInsertCmpFn) _compare_node_names);
@@ -718,18 +721,18 @@ int unload_package(ArgusPackage package) {
         free(real_pack->all_nodes);
     }
 
-    for (uint16_t i = 0; i < real_pack->total_parts; i++) {
-        char *part_path = real_pack->part_paths[i];
-        if (part_path == NULL) {
-            break;
-        }
-        free(part_path);
-    }
-    
     if (real_pack->part_paths != NULL) {
+        for (uint16_t i = 0; i < real_pack->total_parts; i++) {
+            char *part_path = real_pack->part_paths[i];
+            if (part_path == NULL) {
+                break;
+            }
+            free(part_path);
+        }
+
         free(real_pack->part_paths);
     }
-    
+
     free(package);
     return 0;
 }

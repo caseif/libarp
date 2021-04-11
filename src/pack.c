@@ -729,12 +729,48 @@ static int _unlink_part_files(const char *target_dir, const char *pack_name, siz
     return 0;
 }
 
-static int _write_package_contents_to_disk(const unsigned char *header_contents, fs_node_ptr_arr fs_flat,
-        const char *target_dir, arp_packing_options_t *opts, package_important_sizes_t *important_sizes) {
+static void _populate_package_header(arp_packing_options_t *opts, package_important_sizes_t *sizes,
+        unsigned char out_buf[PACKAGE_HEADER_LEN]) {
+    memset(out_buf, 0, sizeof(PACKAGE_HEADER_LEN));
+
+    // magic number
+    // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
+    memcpy(offset_ptr(out_buf, PACKAGE_MAGIC_OFF), FORMAT_MAGIC, PACKAGE_MAGIC_LEN);
+    // version
+    uint16_t version = CURRENT_MAJOR_VERSION;
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_VERSION_OFF), &version, PACKAGE_VERSION_LEN);
+    // compression
+    if (opts->compression_type != NULL) {
+        memcpy(offset_ptr(out_buf, PACKAGE_COMPRESSION_OFF), opts->compression_type, PACKAGE_COMPRESSION_LEN);
+    }
+    // namespace
+    memcpy(offset_ptr(out_buf, PACKAGE_NAMESPACE_OFF), opts->pack_namespace, PACKAGE_NAMESPACE_LEN);
+    // parts
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_PARTS_OFF), &sizes->part_count, PACKAGE_PARTS_LEN);
+    // catalogue offset
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_CAT_OFF_OFF), &sizes->cat_off, PACKAGE_CAT_OFF_LEN);
+    // catalogue size
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_CAT_LEN_OFF), &sizes->cat_len, PACKAGE_CAT_LEN_LEN);
+    // node count
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_CAT_CNT_OFF), &sizes->node_count, PACKAGE_CAT_CNT_LEN);
+    // directory count
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_DIR_CNT_OFF), &sizes->directory_count, PACKAGE_RES_CNT_LEN);
+    // resource count
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_RES_CNT_OFF), &sizes->resource_count, PACKAGE_RES_CNT_LEN);
+    // body offset
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_BODY_OFF_OFF), &sizes->first_body_off, PACKAGE_BODY_OFF_LEN);
+    // body size
+    copy_int_as_le(offset_ptr(out_buf, PACKAGE_BODY_LEN_OFF), &sizes->body_lens[0], PACKAGE_BODY_LEN_LEN);
+    // reserved 1
+    memset(offset_ptr(out_buf, PACKAGE_RESERVED_1_OFF), 0, PACKAGE_RESERVED_1_LEN);
+}
+
+static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *target_dir,
+        arp_packing_options_t *opts, package_important_sizes_t *sizes) {
     FILE *cur_part_file = NULL;
     char *cur_part_path = NULL;
 
-    bool skip_part_suffix = important_sizes->part_count == 1;
+    bool skip_part_suffix = sizes->part_count == 1;
     cur_part_path = _get_part_path(target_dir, opts->pack_name, 1, skip_part_suffix, cur_part_path);
 
     if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
@@ -743,25 +779,11 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         return -1;
     }
 
-    // write package header
-    if (fwrite(header_contents, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
-        fclose(cur_part_file);
-        unlink(cur_part_path);
-        free(cur_part_path);
-
-        libarp_set_error("Failed to write package header to disk");
-        return -1;
-    }
-
-    size_t cat_off = PACKAGE_HEADER_LEN;
-    size_t body_start = cat_off + important_sizes->cat_len;
-    size_t body_off = body_start;
-
     uint16_t cur_part_index = 1;
 
     unsigned char copy_buffer[COPY_BUFFER_LEN];
 
-    if (fseek(cur_part_file, body_off, SEEK_SET) != 0) {
+    if (fseek(cur_part_file, sizes->first_body_off, SEEK_SET) != 0) {
         fclose(cur_part_file);
         unlink(cur_part_path);
         free(cur_part_path);
@@ -770,23 +792,25 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
         return errno;
     }
 
-    important_sizes->part_count = 1;
+    sizes->part_count = 1;
 
-    memset(important_sizes->body_lens, 0, sizeof(important_sizes->body_lens));
+    memset(sizes->body_lens, 0, sizeof(sizes->body_lens));
+
+    size_t cur_body_off = sizes->first_body_off;
 
     // write node contents
-    for (size_t i = 0; i < important_sizes->node_count; i++) {
+    for (size_t i = 0; i < sizes->node_count; i++) {
         // disable lint to remove a very stubborn false positive
         // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
         fs_node_ptr node = fs_flat[i];
 
-        size_t new_part_len = body_off + node->size;
+        size_t new_part_len = sizes->first_body_off + node->size;
         if (opts->max_part_len != 0 && new_part_len > opts->max_part_len) {
             fclose(cur_part_file);
 
-            important_sizes->body_lens[cur_part_index] = body_off;
+            sizes->body_lens[cur_part_index] = sizes->first_body_off;
             cur_part_index += 1;
-            important_sizes->part_count += 1;
+            sizes->part_count += 1;
 
             cur_part_path = _get_part_path(target_dir, opts->pack_name, cur_part_index, false, cur_part_path);
 
@@ -815,10 +839,12 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                 return -1;
             }
 
-            body_off = sizeof(part_header);
+            cur_body_off = sizeof(part_header);
         }
 
-        node->data_off = cur_part_index == 1 ? (body_off - body_start) : (body_off - PACKAGE_PART_HEADER_LEN);
+        node->data_off = cur_part_index == 1
+            ? (cur_body_off - sizes->first_body_off)
+            : (cur_body_off - PACKAGE_PART_HEADER_LEN);
         node->part = cur_part_index;
         
         char err_msg[ERR_MSG_MAX_LEN];
@@ -861,7 +887,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                     //TODO: handle compression
 
                     dir_list_index = 0;
-                    body_off += sizeof(dir_listing_buffer);
+                    cur_body_off += sizeof(dir_listing_buffer);
                     dir_data_len += sizeof(dir_listing_buffer);
                 }
             }
@@ -885,7 +911,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
                 //TODO: handle compression
 
-                body_off += write_bytes;
+                cur_body_off += write_bytes;
                 dir_data_len += write_bytes;
             }
 
@@ -987,7 +1013,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
                     return -1;
                 }
 
-                body_off += to_write;
+                cur_body_off += to_write;
                 packed_data_len += to_write;
                 raw_data_len += read_bytes;
 
@@ -1019,7 +1045,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
             node->crc = crc;
             node->packed_data_len = packed_data_len;
         } else {
-            node->data_off = body_off;
+            node->data_off = cur_body_off;
             node->packed_data_len = 0;
             // just skip it
             continue;
@@ -1045,7 +1071,29 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
     free(cur_part_path);
 
-    if (fseek(first_part_file, cat_off, SEEK_SET) != 0) {
+    // generate package header
+    unsigned char pack_header[PACKAGE_HEADER_LEN];
+
+    _populate_package_header(opts, sizes, pack_header);
+
+    if (fseek(cur_part_file, 0, SEEK_SET) != 0) {
+        free(cur_part_path);
+        _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
+
+        libarp_set_error("Failed to seek to file start");
+        return errno;
+    }
+
+    // write package header
+    if (fwrite(pack_header, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
+        free(cur_part_path);
+        _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
+
+        libarp_set_error("Failed to write package header to disk");
+        return -1;
+    }
+
+    if (fseek(first_part_file, sizes->cat_off, SEEK_SET) != 0) {
         free(cur_part_path);
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
@@ -1055,7 +1103,7 @@ static int _write_package_contents_to_disk(const unsigned char *header_contents,
 
     unsigned char cat_buf[COPY_BUFFER_LEN];
     size_t cat_buf_off = 0;
-    for (size_t i = 0; i < important_sizes->node_count; i++) {
+    for (size_t i = 0; i < sizes->node_count; i++) {
         // flush catalogue buffer if it's going to overflow this iteration
         if (cat_buf_off + NODE_DESC_MAX_LEN > COPY_BUFFER_LEN) {
             if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
@@ -1297,12 +1345,16 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
 
     _emit_message(msg_callback, "Computing package parameters");
 
-    package_important_sizes_t important_sizes;
-    memset(&important_sizes, 0, sizeof(important_sizes));
-    if ((rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &important_sizes)) != 0) {
+    package_important_sizes_t sizes;
+    memset(&sizes, 0, sizeof(sizes));
+
+    if ((rc = _compute_important_sizes(fs_tree, real_opts->max_part_len, &sizes)) != 0) {
         _free_fs_node(fs_tree);
         return rc;
     }
+
+    sizes.cat_off = PACKAGE_HEADER_LEN;
+    sizes.first_body_off = sizes.cat_off + sizes.cat_len;
 
     _emit_message(msg_callback, "Flattening filesystem map");
 
@@ -1313,52 +1365,11 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
         return rc;
     }
 
-    assert(fs_node_count == important_sizes.node_count);
-
-    _emit_message(msg_callback, "Generating package header");
-
-    unsigned char pack_header[PACKAGE_HEADER_LEN];
-    memset(pack_header, 0, sizeof(pack_header));
-
-    size_t cat_off = PACKAGE_HEADER_LEN;
-    size_t body_off = cat_off + important_sizes.cat_len;
-
-    // header population
-    // magic number
-    // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
-    memcpy(offset_ptr(pack_header, PACKAGE_MAGIC_OFF), FORMAT_MAGIC, PACKAGE_MAGIC_LEN);
-    // version
-    uint16_t version = CURRENT_MAJOR_VERSION;
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_VERSION_OFF), &version, PACKAGE_VERSION_LEN);
-    // compression
-    if (real_opts->compression_type != NULL) {
-        //TODO: implement compression
-        //memcpy(offset_ptr(pack_header, PACKAGE_COMPRESSION_OFF), real_opts->compression_type, PACKAGE_COMPRESSION_LEN);
-    }
-    // namespace
-    memcpy(offset_ptr(pack_header, PACKAGE_NAMESPACE_OFF), real_opts->pack_namespace, PACKAGE_NAMESPACE_LEN);
-    // parts
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_PARTS_OFF), &important_sizes.part_count, PACKAGE_PARTS_LEN);
-    // catalogue offset
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_OFF_OFF), &cat_off, PACKAGE_CAT_OFF_LEN);
-    // catalogue size
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_LEN_OFF), &important_sizes.cat_len, PACKAGE_CAT_LEN_LEN);
-    // node count
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_CAT_CNT_OFF), &important_sizes.node_count, PACKAGE_CAT_CNT_LEN);
-    // directory count
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_DIR_CNT_OFF), &important_sizes.directory_count, PACKAGE_RES_CNT_LEN);
-    // resource count
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_RES_CNT_OFF), &important_sizes.resource_count, PACKAGE_RES_CNT_LEN);
-    // body offset
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_OFF_OFF), &body_off, PACKAGE_BODY_OFF_LEN);
-    // body size
-    copy_int_as_le(offset_ptr(pack_header, PACKAGE_BODY_LEN_OFF), &important_sizes.body_lens[0], PACKAGE_BODY_LEN_LEN);
-    // reserved 1
-    memset(offset_ptr(pack_header, PACKAGE_RESERVED_1_OFF), 0, PACKAGE_RESERVED_1_LEN);
+    assert(fs_node_count == sizes.node_count);
 
     _emit_message(msg_callback, "Writing package contents");
 
-    _write_package_contents_to_disk(pack_header, fs_flat, output_dir, real_opts, &important_sizes);
+    _write_package_contents_to_disk(fs_flat, output_dir, real_opts, &sizes);
 
     free(fs_flat);
     free(media_types);

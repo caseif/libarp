@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -169,9 +170,11 @@ int decompress_deflate(const void *compressed_data, size_t compressed_len, size_
             defl_stream.next_out = dfl_out_buf;
 
             rc = inflate(&defl_stream, Z_NO_FLUSH);
+            bool at_end = false;
             switch (rc) {
                 case Z_STREAM_END:
-                    goto end_inflate_loop; // ew
+                    at_end = true;
+                    break;
                 case Z_STREAM_ERROR:
                 case Z_NEED_DICT:
                 case Z_DATA_ERROR:
@@ -198,9 +201,13 @@ int decompress_deflate(const void *compressed_data, size_t compressed_len, size_
 
             memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
             bytes_decompressed += got_len;
-        } while (defl_stream.avail_out == 0);
+
+            if (at_end) {
+                goto end_inflate_loop; // ew
+            }
+        } while (defl_stream.avail_out > 0);
     }
-    
+
     end_inflate_loop:
     inflateEnd(&defl_stream);
 
