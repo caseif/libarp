@@ -249,10 +249,12 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
         char *part_path = NULL;
-        size_t part_path_len_b = parent_dir_len_s
+        size_t part_path_len_s = parent_dir_len_s
+                + 1
                 + stem_len_s
                 + strlen(".part000")
                 + strlen("." PACKAGE_EXT);
+        size_t part_path_len_b = part_path_len_s + 1;
 
         if ((part_path = malloc(part_path_len_b)) == NULL) {
             libarp_set_error("malloc failed");

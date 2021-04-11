@@ -804,7 +804,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
         fs_node_ptr node = fs_flat[i];
 
-        size_t new_part_len = sizes->first_body_off + node->size;
+        size_t new_part_len = cur_body_off + node->size;
         if (opts->max_part_len != 0 && new_part_len > opts->max_part_len) {
             fclose(cur_part_file);
 
