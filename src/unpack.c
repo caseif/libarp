@@ -44,6 +44,8 @@
 #include <sys/mman.h>
 #endif
 
+#define IO_BUFFER_LEN (128 * 1024) // 128 KB
+
 #define VAR_STR_BUF_LEN 256
 
 static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t src_off) {
@@ -750,7 +752,8 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **data_out, FILE *part) {
+static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **out_data, size_t *out_data_len,
+        FILE *part) {
     if (node->part_index > pack->total_parts) {
         libarp_set_error("Node part index is invalid");
         return -1;
@@ -784,8 +787,12 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
         return -1;
     }
 
-    void *raw_data = NULL;
-    if ((raw_data = malloc(node->data_len)) == NULL) {
+    void *final_data = NULL;
+    size_t final_data_len = node->data_len;
+    if (CMPR_ANY(pack->compression_type)) {
+        final_data_len = node->data_uc_len;
+    }
+    if ((final_data = malloc(final_data_len)) == NULL) {
         if (part == NULL) {
             fclose(part_file);
         }
@@ -803,61 +810,85 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
 
     fseek(part_file, part_body_start + node->data_off, SEEK_SET);
 
-    if ((fread(raw_data, node->data_len, 1, part_file)) != 1) {
-        free(raw_data);
+    void *compress_data;
+    if (CMPR_ANY(pack->compression_type)) {
+        if (CMPR_DEFLATE(pack->compression_type)) {
+            compress_data = decompress_deflate_begin(node->data_len, node->data_uc_len);
+        } else {
+             // should have already validated by now
+            assert(false);
+        }
+    }
+
+    size_t remaining = node->data_len;
+    size_t written_bytes = 0;
+    unsigned char read_buf[IO_BUFFER_LEN];
+    uint32_t real_crc = 0;
+    bool began_crc = false;
+
+    while (remaining > 0) {
+        size_t to_read = MIN(sizeof(read_buf), remaining);
+        if ((fread(read_buf, to_read, 1, part_file)) != 1) {
+            free(final_data);
+            if (part == NULL) {
+                fclose(part_file);
+            }
+
+            libarp_set_error("Failed to read from part file");
+            return -1;
+        }
+
+        remaining -= to_read;
+
         if (part == NULL) {
             fclose(part_file);
         }
 
-        libarp_set_error("Failed to read from part file");
-        return -1;
+        if (began_crc) {
+            real_crc = crc32c_cont(real_crc, read_buf, to_read);
+        } else {
+            real_crc = crc32c(read_buf, to_read);
+            began_crc = true;
+        }
+
+        void *final_chunk = read_buf;
+        size_t final_chunk_len = to_read;
+
+        if (CMPR_ANY(pack->compression_type)) {
+            if (CMPR_DEFLATE(pack->compression_type)) {
+                int rc = 0xDEADBEEF;
+                if ((rc = decompress_deflate(compress_data, read_buf, to_read, &final_chunk, &final_chunk_len)) != 0) {
+                    decompress_deflate_end(compress_data);
+
+                    return rc;
+                }
+            } else {
+                // should have already validated by now
+                assert(false);
+            }
+        }
+        
+        memcpy((void*) ((uintptr_t) final_data + written_bytes), final_chunk, final_chunk_len);
+        written_bytes += final_chunk_len;
+
+        if (final_chunk != read_buf) {
+            free(final_chunk);
+        }
     }
 
-    if (part == NULL) {
-        fclose(part_file);
+    if (CMPR_DEFLATE(pack->compression_type)) {
+        decompress_deflate_end(compress_data);
     }
 
-    uint32_t real_crc = crc32c(raw_data, node->data_len);
     if (real_crc != node->crc) {
-        free(raw_data);
+        free(final_data);
 
         libarp_set_error("CRC mismatch");
         return -1;
     }
 
-    void *final_data = NULL;
-
-    if (pack->compression_type[0] != '\0') {
-        int rc = 0xDEADBEEF;
-
-        void *decompressed_data = NULL;
-        size_t decompressed_data_len = 0;
-
-        if (strcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-            DeflateStream defl_stream = decompress_deflate_begin(node->data_len, node->data_uc_len);
-            rc = decompress_deflate(defl_stream, raw_data, node->data_len, &decompressed_data, &decompressed_data_len);
-            decompress_deflate_end(defl_stream);
-        } else {
-            free(raw_data);
-
-            libarp_set_error("Unrecognized compression magic");
-            return -1;
-        }
-
-        free(raw_data);
-
-        if (rc != 0) {
-            return rc;
-        }
-
-        *data_out = decompressed_data;
-
-        return 0;
-    } else {
-        final_data = raw_data;
-    }
-
-    *data_out = final_data;
+    *out_data = final_data;
+    *out_data_len = final_data_len;
 
     return 0;
 }
@@ -933,15 +964,16 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         return cur_node->loaded_data;
     }
 
-    void *data = NULL;
+    void *res_data = NULL;
+    size_t res_data_len = 0;
     int rc = 0;
-    if ((rc = _load_node_data(real_pack, cur_node, &data, NULL)) != 0) {
+    if ((rc = _load_node_data(real_pack, cur_node, &res_data, &res_data_len, NULL)) != 0) {
         return NULL;
     }
 
     arp_resource_t *res = NULL;
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
-        free(data);
+        free(res_data);
 
         libarp_set_error("malloc failed");
         return NULL;
@@ -952,8 +984,8 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
     res->info.media_type = cur_node->media_type;
     res->info.path = NULL;
 
-    res->data = data;
-    res->len = cur_node->data_len;
+    res->data = res_data;
+    res->len = res_data_len;
     res->extra = cur_node;
     cur_node->loaded_data = res;
 
@@ -1044,15 +1076,10 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
         }
 
         void *res_data = NULL;
-        if ((res_data = malloc(node->data_uc_len)) == NULL) {
-            libarp_set_error("malloc failed");
-            return ENOMEM;
-        }
+        size_t res_data_len = 0;
 
         int rc = 0xDEADBEEF;
-        if ((rc = _load_node_data(pack, node, &res_data, *last_part)) != 0) {
-            free(res_data);
-
+        if ((rc = _load_node_data(pack, node, &res_data, &res_data_len, *last_part)) != 0) {
             return rc;
         }
 
@@ -1077,11 +1104,7 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
             return errno;
         }
 
-        size_t real_data_len = node->data_len;
-        if (strlen(pack->compression_type) > 0) {
-            real_data_len = node->data_uc_len;
-        }
-        if (fwrite(res_data, real_data_len, 1, res_file) != 1) {
+        if (fwrite(res_data, res_data_len, 1, res_file) != 1) {
             free(res_data);
 
             libarp_set_error("Failed to write to output file");

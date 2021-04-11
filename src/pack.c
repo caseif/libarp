@@ -36,7 +36,7 @@
 
 #define CURRENT_MAJOR_VERSION 1
 
-#define COPY_BUFFER_LEN (128 * 1024) // 128 KB
+#define IO_BUFFER_LEN (128 * 1024) // 128 KB
 #define DIR_LIST_BUFFER_LEN 1024 // 4 KB
 
 ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, size_t max_part_len,
@@ -781,7 +781,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
     uint16_t cur_part_index = 1;
 
-    unsigned char copy_buffer[COPY_BUFFER_LEN];
+    unsigned char read_buffer[IO_BUFFER_LEN];
 
     if (fseek(cur_part_file, sizes->first_body_off, SEEK_SET) != 0) {
         fclose(cur_part_file);
@@ -971,7 +971,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             size_t read_bytes = 0;
             clearerr(cur_node_file);
             size_t remaining = cur_node_size;
-            while ((read_bytes = fread(copy_buffer, 1, COPY_BUFFER_LEN, cur_node_file)) > 0) {
+            while ((read_bytes = fread(read_buffer, 1, IO_BUFFER_LEN, cur_node_file)) > 0) {
                 if (read_bytes > remaining) {
                     libarp_set_error("File size changed while reading");
                     return -1;
@@ -979,12 +979,12 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
                 remaining -= read_bytes;
 
-                void *processed_chunk = copy_buffer;
+                void *processed_chunk = read_buffer;
                 size_t to_write = read_bytes;
 
                 if (strlen(opts->compression_type) > 0) {
                     if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-                        compress_deflate(compress_handle, copy_buffer, read_bytes,
+                        compress_deflate(compress_handle, read_buffer, read_bytes,
                                 &processed_chunk, &to_write);
                     } else {
                         assert(false);
@@ -1000,7 +1000,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
                 size_t written = fwrite(processed_chunk, to_write, 1, cur_part_file);
 
-                if (processed_chunk != copy_buffer) {
+                if (processed_chunk != read_buffer) {
                     free(processed_chunk);
                 }
 
@@ -1101,11 +1101,11 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         return errno;
     }
 
-    unsigned char cat_buf[COPY_BUFFER_LEN];
+    unsigned char cat_buf[IO_BUFFER_LEN];
     size_t cat_buf_off = 0;
     for (size_t i = 0; i < sizes->node_count; i++) {
         // flush catalogue buffer if it's going to overflow this iteration
-        if (cat_buf_off + NODE_DESC_MAX_LEN > COPY_BUFFER_LEN) {
+        if (cat_buf_off + NODE_DESC_MAX_LEN > IO_BUFFER_LEN) {
             if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
                 fclose(first_part_file);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);

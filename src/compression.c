@@ -263,6 +263,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
     }
 
     *out_data = output_buf;
+    *out_data_len = total_out_bytes;
 
     return 0;
 }

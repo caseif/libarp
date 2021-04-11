@@ -9,6 +9,13 @@
 
 #pragma once
 
+#include <string.h>
+
+#include "internal/package_defines.h"
+
+#define CMPR_ANY(magic) (strlen(magic) > 0)
+#define CMPR_DEFLATE(magic) (strcmp(magic, ARP_COMPRESS_MAGIC_DEFLATE) == 0)
+
 typedef void *DeflateStream;
 
 DeflateStream compress_deflate_begin(const size_t total_input_bytes);
