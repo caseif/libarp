@@ -828,11 +828,15 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
     void *final_data = NULL;
 
     if (pack->compression_type[0] != '\0') {
-        void *decompressed_data = NULL;
         int rc = 0xDEADBEEF;
 
+        void *decompressed_data = NULL;
+        size_t decompressed_data_len = 0;
+
         if (strcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-            rc = decompress_deflate(raw_data, node->data_len, node->data_uc_len, &decompressed_data);
+            DeflateStream defl_stream = decompress_deflate_begin(node->data_len, node->data_uc_len);
+            rc = decompress_deflate(defl_stream, raw_data, node->data_len, &decompressed_data, &decompressed_data_len);
+            decompress_deflate_end(defl_stream);
         } else {
             free(raw_data);
 

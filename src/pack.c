@@ -962,7 +962,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
             if (strlen(opts->compression_type) > 0) {
                 if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-                    compress_handle = compress_deflate_init(cur_node_size);
+                    compress_handle = compress_deflate_begin(cur_node_size);
                 } else {
                     assert(false);
                 }
@@ -1024,7 +1024,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
             if (strlen(opts->compression_type) > 0) {
                 if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
-                    compress_deflate_finish(compress_handle);
+                    compress_deflate_end(compress_handle);
                 } else {
                     assert(false);
                 }

@@ -15,13 +15,14 @@
 
 typedef struct DeflateStream {
     size_t total_input_bytes;
+    size_t total_output_bytes;
     size_t processed_bytes;
     z_stream zlib_stream;
     unsigned char in_buf[DEFLATE_CHUNK_LEN];
     unsigned char out_buf[DEFLATE_CHUNK_LEN];
 } deflate_stream_t;
 
-DeflateStream compress_deflate_init(const size_t total_input_bytes) {
+DeflateStream compress_deflate_begin(const size_t total_input_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -120,7 +121,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
     return 0;
 }
 
-void compress_deflate_finish(DeflateStream stream) {
+void compress_deflate_end(DeflateStream stream) {
     deflate_stream_t *real_stream = (deflate_stream_t*) stream;
 
     deflateEnd(&real_stream->zlib_stream);
@@ -129,50 +130,76 @@ void compress_deflate_finish(DeflateStream stream) {
     return;
 }
 
-int decompress_deflate(const void *compressed_data, size_t compressed_len, size_t final_len, void **out_data) {
-    int rc = (int) 0xDEADBEEF;
+DeflateStream decompress_deflate_begin(const size_t total_input_bytes, const size_t total_output_bytes) {
+    deflate_stream_t *stream = NULL;
+    if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
+        libarp_set_error("malloc failed");
+        return NULL;
+    }
 
-    void *inflated_data = NULL;
-    if ((inflated_data = malloc(final_len)) == NULL) {
+    stream->total_input_bytes = total_input_bytes;
+    stream->total_output_bytes = total_output_bytes;
+    stream->processed_bytes = 0;
+
+    stream->zlib_stream.zalloc = Z_NULL;
+    stream->zlib_stream.zfree = Z_NULL;
+    stream->zlib_stream.opaque = Z_NULL;
+    stream->zlib_stream.avail_in = 0;
+    stream->zlib_stream.next_in = Z_NULL;
+
+    int rc = 0xDEADBEEF;
+    if ((rc = inflateInit(&stream->zlib_stream)) != Z_OK) {
+        free(stream);
+
+        libarp_set_error("zlib: inflateInit failed");
+        return NULL;
+    }
+
+    return stream;
+}
+
+int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, void **out_data, size_t *out_data_len) {
+    int rc = 0xDEADBEEF;
+
+    deflate_stream_t *real_stream = (deflate_stream_t*) stream;
+
+    size_t remaining = in_data_len;
+    size_t total_out_bytes = 0;
+    const void *data_window = in_data;
+
+    size_t output_buf_len = in_data_len * 2;
+    void *output_buf;
+    if ((output_buf = malloc(output_buf_len)) == NULL) {
         libarp_set_error("malloc failed");
         return ENOMEM;
     }
 
-    z_stream defl_stream;
-    defl_stream.zalloc = Z_NULL;
-    defl_stream.zfree = Z_NULL;
-    defl_stream.opaque = Z_NULL;
-    defl_stream.avail_in = 0;
-    defl_stream.next_in = Z_NULL;
-    
-    if ((rc = inflateInit(&defl_stream)) != Z_OK) {
-        libarp_set_error("zlib: inflateInit failed");
-        return -1;
-    }
+    z_stream *defl_stream = &real_stream->zlib_stream;
 
-    size_t remaining = compressed_len;
-    size_t bytes_decompressed = 0;
-    const void *data_window = compressed_data;
-
-    unsigned char dfl_out_buf[DEFLATE_CHUNK_LEN];
+    bool at_end = false;
 
     while (remaining > 0) {
-        size_t to_read = MIN(remaining, sizeof(dfl_out_buf));
+        size_t to_read = MIN(remaining, sizeof(real_stream->out_buf));
 
-        defl_stream.avail_in = to_read;
-        defl_stream.next_in = (void*) data_window;
+        defl_stream->avail_in = to_read;
+        defl_stream->next_in = (void*) data_window;
 
         remaining -= to_read;
         data_window = (void*) ((uintptr_t) data_window + to_read);
 
         do {
-            defl_stream.avail_out = sizeof(dfl_out_buf);
-            defl_stream.next_out = dfl_out_buf;
+            defl_stream->avail_out = sizeof(real_stream->out_buf);
+            defl_stream->next_out = real_stream->out_buf;
 
-            rc = inflate(&defl_stream, Z_NO_FLUSH);
-            bool at_end = false;
+            rc = inflate(defl_stream, Z_NO_FLUSH);
             switch (rc) {
                 case Z_STREAM_END:
+                    if (remaining > 0) {
+                        free(output_buf);
+
+                        libarp_set_error("Encountered premature end of DEFLATE stream");
+                        return -1;
+                    }
                     at_end = true;
                     break;
                 case Z_STREAM_ERROR:
@@ -180,45 +207,61 @@ int decompress_deflate(const void *compressed_data, size_t compressed_len, size_
                 case Z_DATA_ERROR:
                 case Z_MEM_ERROR:
                 default:
-                    inflateEnd(&defl_stream);
-
-                    free(inflated_data);
+                    free(output_buf);
 
                     libarp_set_error("zlib: Inflate failed");
                     return -1;
             }
 
-            size_t got_len = sizeof(dfl_out_buf) - defl_stream.avail_out;
+            size_t out_bytes = sizeof(real_stream->out_buf) - defl_stream->avail_out;
 
-            if (bytes_decompressed + got_len > final_len) {
-                inflateEnd(&defl_stream);
-
-                free(inflated_data);
+            if (total_out_bytes + out_bytes > real_stream->total_output_bytes) {
+                free(output_buf);
 
                 libarp_set_error("Decompressed data exceeds expected length");
                 return -1;
             }
 
-            memcpy((void*) ((uintptr_t) inflated_data + bytes_decompressed), dfl_out_buf, got_len);
-            bytes_decompressed += got_len;
+            if (total_out_bytes + out_bytes > output_buf_len) {
+                output_buf_len += DEFLATE_CHUNK_LEN;
+                void *output_buf_new = NULL;
+                if ((output_buf_new = realloc(output_buf, output_buf_len)) == NULL) {
+                    free(output_buf);
+
+                    libarp_set_error("realloc failed");
+                    return ENOMEM;
+                }
+
+                output_buf = output_buf_new;
+            }
+
+            memcpy((void*) ((uintptr_t) output_buf + total_out_bytes), real_stream->out_buf, out_bytes);
+            total_out_bytes += out_bytes;
 
             if (at_end) {
                 goto end_inflate_loop; // ew
             }
-        } while (defl_stream.avail_out > 0);
+        } while (defl_stream->avail_out > 0);
     }
 
     end_inflate_loop:
-    inflateEnd(&defl_stream);
 
-    if (rc != Z_STREAM_END) {
-        free(inflated_data);
+    if (real_stream->processed_bytes == real_stream->total_output_bytes && !at_end) {
+        free(output_buf);
 
         libarp_set_error("DEFLATE stream is incomplete");
         return -1;
     }
 
-    *out_data = inflated_data;
+    *out_data = output_buf;
 
     return 0;
+}
+
+void decompress_deflate_end(DeflateStream stream) {
+    deflate_stream_t *real_stream = (deflate_stream_t*) stream;
+
+    inflateEnd(&real_stream->zlib_stream);
+
+    free(real_stream);
 }
