@@ -1043,13 +1043,20 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
             return ENOMEM;
         }
 
-        _load_node_data(pack, node, &res_data, *last_part);
+        int rc = 0xDEADBEEF;
+        if ((rc = _load_node_data(pack, node, &res_data, *last_part)) != 0) {
+            free(res_data);
+
+            return rc;
+        }
 
         size_t res_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1 + node->ext_len_s;
         size_t res_path_len_b = res_path_len_s + 1;
 
         char *res_path;
         if ((res_path = malloc(res_path_len_b)) == NULL) {
+            free(res_data);
+
             libarp_set_error("malloc failed");
             return ENOMEM;
         }
@@ -1058,15 +1065,24 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
 
         FILE *res_file = NULL;
         if ((res_file = fopen(res_path, "w+b")) == NULL) {
+            free(res_data);
+
             libarp_set_error("Failed to open output file for resource");
             return errno;
         }
 
-        if (fwrite(res_data, node->data_len, 1, res_file) != 1) {
+        size_t real_data_len = node->data_len;
+        if (strlen(pack->compression_type) > 0) {
+            real_data_len = node->data_uc_len;
+        }
+        if (fwrite(res_data, real_data_len, 1, res_file) != 1) {
+            free(res_data);
+
             libarp_set_error("Failed to write to output file");
             return errno;
         }
 
+        free(res_data);
         fclose(res_file);
 
         return 0;
