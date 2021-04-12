@@ -279,8 +279,8 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                 return errno;
             }
 
-            if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)
-                    || S_ISLNK(child_stat.st_mode)) {
+            // we don't check for links here because they should be transparently resolved
+            if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)) {
                 node->children_count++;
             }
         }
@@ -351,8 +351,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         free(child_full_path);
 
         closedir(root);
-    } else if (S_ISREG(root_stat.st_mode) || S_ISLNK(root_stat.st_mode)) {
-        node->type = S_ISREG(root_stat.st_mode) ? FS_NODE_TYPE_FILE : FS_NODE_TYPE_LINK;
+    } else if (S_ISREG(root_stat.st_mode)) {
+        // symlinks should be transparently resolved
+        node->type = FS_NODE_TYPE_FILE;
 
         node->size = root_stat.st_size;
     } else {

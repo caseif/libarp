@@ -287,8 +287,8 @@ static int _validate_part_files(argus_package_t *pack, const char *primary_path)
             break;
         }
 
-        if (!S_ISREG(part_stat.st_mode) && !S_ISLNK(part_stat.st_mode)) {
-            libarp_set_error("Part file must be regular file or symlink");
+        if (!S_ISREG(part_stat.st_mode)) {
+            libarp_set_error("Part file must be regular file or symlink to regular file");
 
             rc = EINVAL;
             part_err = EINVAL;
@@ -547,8 +547,8 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return EINVAL;
     }
 
-    if (!S_ISREG(package_file_stat.st_mode) && !S_ISLNK(package_file_stat.st_mode)) {
-        libarp_set_error("Source path must point to regular file or symlink");
+    if (!S_ISREG(package_file_stat.st_mode)) {
+        libarp_set_error("Source path must point to regular file or symlink to regular file");
         return EINVAL;
     }
 
