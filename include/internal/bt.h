@@ -16,12 +16,17 @@
 
 struct BtNode;
 
+typedef bool BtNodeColor;
+#define BT_RED true
+#define BT_BLACK false
+
 typedef struct BtNode {
     // this count includes the top-level node itself
     struct BtNode *l;
     struct BtNode *r;
     struct BtNode *parent;
     void *data;
+    BtNodeColor color;
 } bt_node_t;
 
 typedef struct BinaryTree {
