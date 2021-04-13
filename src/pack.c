@@ -658,7 +658,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
         sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s;
 
-        size_t node_len = fs_root->children_count * NODE_DESCRIPTOR_INDEX_LEN;
+        size_t node_len = fs_root->children_count * NODE_DESC_INDEX_LEN;
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_len;
 
         if (max_part_len != 0 && node_len > max_part_len) {
@@ -1143,23 +1143,23 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             }
         }
 
-        memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &arp_type_ordinal, NODE_DESC_TYPE_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PART_OFF), &node->part, NODE_DESC_PART_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_OFF_OFF), &node->data_off, NODE_DESC_DATA_OFF_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PACKED_DATA_LEN_OFF), &node->packed_data_len, NODE_DESC_PACKED_DATA_LEN_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UNPACKED_DATA_LEN_OFF), &node->size, NODE_DESC_UNPACKED_DATA_LEN_LEN);
-        memcpy(offset_ptr(cur_node_buf, NODE_DESC_CRC_OFF), &node->crc, NODE_DESC_CRC_LEN);
+        memcpy(offset_ptr(cur_node_buf, ND_TYPE_OFF), &arp_type_ordinal, ND_TYPE_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_PART_OFF), &node->part, ND_PART_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_DATA_OFF_OFF), &node->data_off, ND_DATA_OFF_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_PACKED_DATA_LEN_OFF), &node->packed_data_len, ND_PACKED_DATA_LEN_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_UNPACKED_DATA_LEN_OFF), &node->size, ND_UNPACKED_DATA_LEN_LEN);
+        memcpy(offset_ptr(cur_node_buf, ND_CRC_OFF), &node->crc, ND_CRC_LEN);
 
         // root node must have empty name in package
         size_t real_name_len_s = i == 0 ? 0 : name_len_s;
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_NAME_LEN_OFF), &real_name_len_s,
-                NODE_DESC_NAME_LEN_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_NAME_LEN_OFF), &real_name_len_s,
+                ND_NAME_LEN_LEN);
 
         if (node->type != FS_NODE_TYPE_DIR) {
-            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_EXT_LEN_OFF), &ext_len_s,
-                    NODE_DESC_EXT_LEN_LEN);
-            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_MT_LEN_OFF), &mt_len_s,
-                    NODE_DESC_MT_LEN_LEN);
+            copy_int_as_le(offset_ptr(cur_node_buf, ND_EXT_LEN_OFF), &ext_len_s,
+                    ND_EXT_LEN_LEN);
+            copy_int_as_le(offset_ptr(cur_node_buf, ND_MT_LEN_OFF), &mt_len_s,
+                    ND_MT_LEN_LEN);
         }
 
         size_t desc_len = NODE_DESC_BASE_LEN;
@@ -1179,7 +1179,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         }
 
         // write descriptor length
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_LEN_OFF), &desc_len, NODE_DESC_LEN_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, ND_LEN_OFF), &desc_len, ND_LEN_LEN);
 
         memcpy(offset_ptr(cat_buf, cat_buf_off), cur_node_buf, desc_len);
 

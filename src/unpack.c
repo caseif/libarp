@@ -175,7 +175,6 @@ static int _validate_part_files(arp_package_t *pack, const char *primary_path) {
     // _b = buffer length, includes null terminator
     // _s = string length, does not include null terminator
     size_t file_base_len_s = strlen(file_base);
-    size_t file_base_len_b = file_base_len_s + 1;
 
     if (memcmp(file_base + file_base_len_s - strlen("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
         libarp_set_error("Unexpected file extension for primary package file");
@@ -402,7 +401,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
     size_t real_node_count = 0;
     size_t real_resource_count = 0;
     for (size_t i = 0; i < pack->node_count; i++) {
-        if (pack->cat_len - node_start < NODE_DESC_LEN_LEN) {
+        if (pack->cat_len - node_start < ND_LEN_LEN) {
             libarp_set_error("Catalogue underflow");
             return -1;
         }
@@ -413,7 +412,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
         }
 
         uint16_t node_desc_len = 0;
-        _copy_int_to_field(&node_desc_len, catalogue, NODE_DESC_LEN_LEN, node_start + NODE_DESC_LEN_OFF);
+        _copy_int_to_field(&node_desc_len, catalogue, ND_LEN_LEN, node_start + ND_LEN_OFF);
 
         if (node_desc_len < NODE_DESC_BASE_LEN) {
             libarp_set_error("Node descriptor is too small");
@@ -437,15 +436,15 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
         node->package = pack;
         node->index = i;
 
-        _copy_int_to_field(&node->type, catalogue, NODE_DESC_TYPE_LEN, node_start + NODE_DESC_TYPE_OFF);
-        _copy_int_to_field(&node->part_index, catalogue, NODE_DESC_PART_LEN, node_start + NODE_DESC_PART_OFF);
-        _copy_int_to_field(&node->data_off, catalogue, NODE_DESC_DATA_OFF_LEN, node_start + NODE_DESC_DATA_OFF_OFF);
-        _copy_int_to_field(&node->packed_data_len, catalogue, NODE_DESC_PACKED_DATA_LEN_LEN, node_start + NODE_DESC_PACKED_DATA_LEN_OFF);
-        _copy_int_to_field(&node->unpacked_data_len, catalogue, NODE_DESC_UNPACKED_DATA_LEN_LEN, node_start + NODE_DESC_UNPACKED_DATA_LEN_OFF);
-        _copy_int_to_field(&node->crc, catalogue, NODE_DESC_CRC_LEN, node_start + NODE_DESC_CRC_OFF);
-        _copy_int_to_field(&node->name_len_s, catalogue, NODE_DESC_NAME_LEN_LEN, node_start + NODE_DESC_NAME_LEN_OFF);
-        _copy_int_to_field(&node->ext_len_s, catalogue, NODE_DESC_EXT_LEN_LEN, node_start + NODE_DESC_EXT_LEN_OFF);
-        _copy_int_to_field(&node->media_type_len_s, catalogue, NODE_DESC_MT_LEN_LEN, node_start + NODE_DESC_MT_LEN_OFF);
+        _copy_int_to_field(&node->type, catalogue, ND_TYPE_LEN, node_start + ND_TYPE_OFF);
+        _copy_int_to_field(&node->part_index, catalogue, ND_PART_LEN, node_start + ND_PART_OFF);
+        _copy_int_to_field(&node->data_off, catalogue, ND_DATA_OFF_LEN, node_start + ND_DATA_OFF_OFF);
+        _copy_int_to_field(&node->packed_data_len, catalogue, ND_PACKED_DATA_LEN_LEN, node_start + ND_PACKED_DATA_LEN_OFF);
+        _copy_int_to_field(&node->unpacked_data_len, catalogue, ND_UNPACKED_DATA_LEN_LEN, node_start + ND_UNPACKED_DATA_LEN_OFF);
+        _copy_int_to_field(&node->crc, catalogue, ND_CRC_LEN, node_start + ND_CRC_OFF);
+        _copy_int_to_field(&node->name_len_s, catalogue, ND_NAME_LEN_LEN, node_start + ND_NAME_LEN_OFF);
+        _copy_int_to_field(&node->ext_len_s, catalogue, ND_EXT_LEN_LEN, node_start + ND_EXT_LEN_OFF);
+        _copy_int_to_field(&node->media_type_len_s, catalogue, ND_MT_LEN_LEN, node_start + ND_MT_LEN_OFF);
 
         if (NODE_DESC_BASE_LEN + node->name_len_s + node->media_type_len_s > node_desc_len) {
             libarp_set_error("Variable string lengths mismatch descriptor length");
@@ -462,7 +461,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
             return -1;
         }
 
-        size_t name_off = node_start + NODE_DESC_NAME_OFF;
+        size_t name_off = node_start + ND_NAME_OFF;
         size_t ext_off = name_off + node->name_len_s;
         size_t mt_off = ext_off + node->ext_len_s;
 

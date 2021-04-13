@@ -69,41 +69,41 @@
 
 #define PACKAGE_PART_1_SUFFIX ".part001"
 
+#define ND_LEN_LEN                  2
+#define ND_TYPE_LEN                 1
+#define ND_PART_LEN                 2
+#define ND_DATA_OFF_LEN             8
+#define ND_PACKED_DATA_LEN_LEN      8
+#define ND_UNPACKED_DATA_LEN_LEN    8
+#define ND_CRC_LEN                  4
+#define ND_NAME_LEN_LEN             1
+#define ND_EXT_LEN_LEN              1
+#define ND_MT_LEN_LEN               1
+
+#define ND_LEN_OFF                  0x00
+#define ND_TYPE_OFF                 0x02 
+#define ND_PART_OFF                 0x03
+#define ND_DATA_OFF_OFF             0x05
+#define ND_PACKED_DATA_LEN_OFF      0x0D
+#define ND_UNPACKED_DATA_LEN_OFF    0x15
+#define ND_CRC_OFF                  0x1D
+#define ND_NAME_LEN_OFF             0x21
+#define ND_EXT_LEN_OFF              0x22
+#define ND_MT_LEN_OFF               0x23
+#define ND_NAME_OFF                 0x24
+
+#define NODE_DESC_BASE_LEN ND_NAME_OFF
+
 #define NODE_NAME_MAX_LEN 0xFF
 #define NODE_EXT_MAX_LEN 0xFF
 #define NODE_MT_MAX_LEN 0xFF
 #define NODE_DESC_MAX_LEN (NODE_DESC_BASE_LEN + NODE_NAME_MAX_LEN + NODE_EXT_MAX_LEN + NODE_MT_MAX_LEN)
 
-#define NODE_DESC_LEN_LEN               2
-#define NODE_DESC_TYPE_LEN              1
-#define NODE_DESC_PART_LEN              2
-#define NODE_DESC_DATA_OFF_LEN          8
-#define NODE_DESC_PACKED_DATA_LEN_LEN   8
-#define NODE_DESC_UNPACKED_DATA_LEN_LEN 8
-#define NODE_DESC_CRC_LEN               4
-#define NODE_DESC_NAME_LEN_LEN          1
-#define NODE_DESC_EXT_LEN_LEN           1
-#define NODE_DESC_MT_LEN_LEN            1
-
-#define NODE_DESC_LEN_OFF               0x00
-#define NODE_DESC_TYPE_OFF              0x02 
-#define NODE_DESC_PART_OFF              0x03
-#define NODE_DESC_DATA_OFF_OFF          0x05
-#define NODE_DESC_PACKED_DATA_LEN_OFF   0x0D
-#define NODE_DESC_UNPACKED_DATA_LEN_OFF 0x15
-#define NODE_DESC_CRC_OFF               0x1D
-#define NODE_DESC_NAME_LEN_OFF          0x21
-#define NODE_DESC_EXT_LEN_OFF           0x22
-#define NODE_DESC_MT_LEN_OFF            0x23
-#define NODE_DESC_NAME_OFF              0x24
-
-#define NODE_DESC_BASE_LEN NODE_DESC_NAME_OFF
-
 // the length of an index to a node descriptor
 // directory nodes contain an array of node descriptor indices in their body
-#define NODE_DESCRIPTOR_INDEX_LEN 4
+#define NODE_DESC_INDEX_LEN 4
 
 #define PACK_NODE_TYPE_RESOURCE 0
 #define PACK_NODE_TYPE_DIRECTORY 1
 
-#define DIRECTORY_CONTENT_MAX_LEN (4294967296 * NODE_DESCRIPTOR_INDEX_LEN) // we need _some_ sane limit
+#define DIRECTORY_CONTENT_MAX_LEN (4294967296 * NODE_DESC_INDEX_LEN) // we need _some_ sane limit
