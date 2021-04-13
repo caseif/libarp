@@ -56,7 +56,7 @@ static void _copy_str_to_field(void *dst, const void *src, const size_t dst_len,
     memcpy(dst, (void*) ((uintptr_t) src + src_off), dst_len);
 }
 
-static int _parse_package_header(argus_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
+static int _parse_package_header(arp_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
     if (memcmp(header_data, FORMAT_MAGIC, PACKAGE_MAGIC_LEN) != 0) {
         libarp_set_error("Package magic is incorrect");
         return -1;
@@ -83,7 +83,7 @@ static int _parse_package_header(argus_package_t *pack, const unsigned char head
     return 0;
 }
 
-static int _validate_package_header(const argus_package_t *pack, const size_t pack_size) {
+static int _validate_package_header(const arp_package_t *pack, const size_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
         libarp_set_error("Package compression type is not supported");
@@ -141,7 +141,7 @@ static int _validate_package_header(const argus_package_t *pack, const size_t pa
     return 0;
 }
 
-static int _validate_part_files(argus_package_t *pack, const char *primary_path) {
+static int _validate_part_files(arp_package_t *pack, const char *primary_path) {
     char *real_path = NULL;
     #ifdef _WIN32
     real_path = _fullpath(NULL, primary_path, (size_t) -1);
@@ -390,7 +390,7 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
     return 0;
 }
 
-static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view) {
+static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
         libarp_set_error("calloc failed");
         return -1;
@@ -425,16 +425,16 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
             libarp_set_error("Catalogue underflow");
             return -1;
         }
-
-        size_t desc_len = sizeof(node_desc_t);
         
-        if ((pack->all_nodes[i] = (node_desc_t*) malloc(desc_len)) == NULL) {
+        node_desc_t *node = NULL;
+        if ((node = malloc(sizeof(node_desc_t))) == NULL) {
             libarp_set_error("malloc failed");
             return -1;
         }
 
-        node_desc_t *node = pack->all_nodes[i];
+        pack->all_nodes[i] = node;
 
+        node->package = pack;
         node->index = i;
 
         _copy_int_to_field(&node->type, catalogue, NODE_DESC_TYPE_LEN, node_start + NODE_DESC_TYPE_OFF);
@@ -540,7 +540,7 @@ static int _parse_package_catalogue(argus_package_t *pack, void *pack_data_view)
     return 0;
 }
 
-int load_package_from_file(const char *path, ArgusPackage *package) {
+int load_package_from_file(const char *path, ArpPackage *package) {
     stat_t package_file_stat;
     if (stat(path, &package_file_stat) != 0) {
         libarp_set_error("Failed to stat package file");
@@ -576,8 +576,8 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
         return -1;
     }
 
-    argus_package_t *pack = NULL;
-    if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
+    arp_package_t *pack = NULL;
+    if ((pack = calloc(1, sizeof(arp_package_t))) == NULL) {
         fclose(package_file);
 
         libarp_set_error("calloc failed");
@@ -647,7 +647,7 @@ int load_package_from_file(const char *path, ArgusPackage *package) {
     return 0;
 }
 
-int load_package_from_memory(const unsigned char *data, size_t package_len, ArgusPackage *package) {
+int load_package_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package) {
     if (package_len < PACKAGE_HEADER_LEN) {
         libarp_set_error("Package is too small to contain package header");
         return -1;
@@ -657,8 +657,8 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, Argu
 
     memcpy(pack_header, data, PACKAGE_HEADER_LEN);
 
-    argus_package_t *pack = NULL;
-    if ((pack = calloc(1, sizeof(argus_package_t))) == NULL) {
+    arp_package_t *pack = NULL;
+    if ((pack = calloc(1, sizeof(arp_package_t))) == NULL) {
         return ENOMEM;
     }
 
@@ -713,8 +713,8 @@ static void _unload_node(node_desc_t *node) {
     }
 }
 
-int unload_package(ArgusPackage package) {
-    argus_package_t *real_pack = (argus_package_t*)package;
+int unload_package(ArpPackage package) {
+    arp_package_t *real_pack = (arp_package_t*)package;
 
     if (real_pack->all_nodes != NULL) {
         for (uint32_t i = 0; i < real_pack->node_count; i++) {
@@ -752,7 +752,7 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void **out_data, size_t *out_data_len,
+static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **out_data, size_t *out_data_len,
         FILE *part) {
     if (node->part_index > pack->total_parts) {
         libarp_set_error("Node part index is invalid");
@@ -893,8 +893,8 @@ static int _load_node_data(const argus_package_t *pack, node_desc_t *node, void 
     return 0;
 }
 
-arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
-    const argus_package_t *real_pack = (const argus_package_t*) package;
+int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta) {
+        const arp_package_t *real_pack = (const arp_package_t*) package;
 
     size_t path_len_s = strlen(path);
 
@@ -908,7 +908,7 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         free(path_copy);
 
         libarp_set_error("Path must contain a namespace");
-        return NULL;
+        return EINVAL;
     }
 
     cursor = needle - path_tail;
@@ -920,54 +920,76 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         free(path_copy);
 
         libarp_set_error("Namespace does not match package");
-        return NULL;
+        return EINVAL;
     }
 
     path_tail += cursor + 1;
 
     // start at root
-    node_desc_t *cur_node = real_pack->all_nodes[0];
+    node_desc_t *node = real_pack->all_nodes[0];
 
     while ((needle = strchr(path_tail, ARP_PATH_DELIMITER)) != NULL) {
         cursor = needle - path_tail;
 
         path_tail[cursor] = '\0';
 
-        cur_node = bt_find(&cur_node->children_tree, path_tail, _cmp_node_names);
-        if (cur_node == NULL) {
+        node = bt_find(&node->children_tree, path_tail, _cmp_node_names);
+        if (node == NULL) {
             free(path_copy);
 
             libarp_set_error("Resource does not exist at the specified path");
-            return NULL;
+            return ENOENT;
         }
 
         path_tail += cursor + 1;
     }
 
     // should be at terminal component now
-    cur_node = bt_find(&cur_node->children_tree, path_tail, _cmp_node_name_to_needle);
-    if (cur_node == NULL) {
+    node = bt_find(&node->children_tree, path_tail, _cmp_node_name_to_needle);
+    if (node == NULL) {
         free(path_copy);
 
         libarp_set_error("Resource does not exist at the specified path");
-        return NULL;
+        return ENOENT;
     }
 
     free(path_copy);
 
-    if (cur_node->type == PACK_NODE_TYPE_DIRECTORY) {
+    if (node->type == PACK_NODE_TYPE_DIRECTORY) {
         libarp_set_error("Requested path points to directory");
-        return NULL;
+        return EISDIR;
     }
 
-    if (cur_node->loaded_data != NULL) {
-        return cur_node->loaded_data;
+    size_t res_len = node->data_len;
+    if (CMPR_ANY(real_pack->compression_type)) {
+        res_len = node->data_uc_len;
+    }
+
+    arp_resource_meta_t meta;
+
+    meta.base_name = node->name;
+    meta.extension = node->ext;
+    meta.media_type = node->media_type;
+    meta.size = node->data_len;
+    meta.extra = node;
+
+    memcpy(out_meta, &meta, sizeof(arp_resource_meta_t));
+
+    return 0;
+}
+
+arp_resource_t *load_resource(arp_resource_meta_t *meta) {
+    node_desc_t *node = (node_desc_t*) meta->extra;
+
+    if (node->loaded_data != NULL) {
+        return node->loaded_data;
     }
 
     void *res_data = NULL;
     size_t res_data_len = 0;
     int rc = 0;
-    if ((rc = _load_node_data(real_pack, cur_node, &res_data, &res_data_len, NULL)) != 0) {
+    if ((rc = _load_node_data(node->package, node, &res_data, &res_data_len, NULL)) != 0) {
+        errno = rc;
         return NULL;
     }
 
@@ -976,18 +998,20 @@ arp_resource_t *load_resource(ConstArgusPackage package, const char *path) {
         free(res_data);
 
         libarp_set_error("malloc failed");
+        errno = ENOMEM;
         return NULL;
     }
 
-    res->info.base_name = cur_node->name;
-    res->info.extension = cur_node->ext;
-    res->info.media_type = cur_node->media_type;
-    res->info.path = NULL;
+    // important to note: arp_resource_t contains a copy of the meta, not just a pointer
+    res->meta.base_name = node->name;
+    res->meta.extension = node->ext;
+    res->meta.media_type = node->media_type;
+    res->meta.size = res_data_len;
+    res->meta.extra = node;
 
     res->data = res_data;
-    res->len = res_data_len;
-    res->extra = cur_node;
-    cur_node->loaded_data = res;
+
+    node->loaded_data = res;
 
     return res;
 }
@@ -1001,15 +1025,15 @@ void unload_resource(arp_resource_t *resource) {
         free(resource->data);
     }
 
-    ((node_desc_t*) resource->extra)->loaded_data = NULL;
+    ((node_desc_t*) resource->meta.extra)->loaded_data = NULL;
 
     free(resource);
 }
 
-int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const char *cur_dir,
+int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part);
 
-int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const char *cur_dir,
+int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part) {
     if (node->type == PACK_NODE_TYPE_DIRECTORY) {
         size_t new_dir_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1;
@@ -1120,8 +1144,8 @@ int _unpack_node_to_fs(const argus_package_t *pack, node_desc_t *node, const cha
     }
 }
 
-int unpack_arp_to_fs(ConstArgusPackage package, const char *target_dir) {
-    const argus_package_t *real_pack = (const argus_package_t*) package;
+int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir) {
+    const arp_package_t *real_pack = (const arp_package_t*) package;
 
     if (real_pack->node_count == 0) {
         libarp_set_error("Package does not contain any nodes");
@@ -1140,41 +1164,32 @@ int unpack_arp_to_fs(ConstArgusPackage package, const char *target_dir) {
     return rc;
 }
 
-int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path, arp_resource_info_t *info_arr,
-        size_t *cur_off);
+int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path,
+        arp_resource_listing_t *listing_arr, size_t *cur_off);
 
-int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path, arp_resource_info_t *info_arr,
-        size_t *cur_off) {
+int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path,
+        arp_resource_listing_t *listing_arr, size_t *cur_off) {
     if (node->type == PACK_NODE_TYPE_RESOURCE) {
         size_t path_len_s = strlen(running_path)
                 + node->name_len_s;
         size_t path_len_b = path_len_s + 1;
 
-        size_t buf_len_b = path_len_b
-                + node->ext_len_s + 1
-                + node->media_type_len_s + 1;
-
         char *buf = NULL;
-        if ((buf = malloc(buf_len_b)) == NULL) {
+        if ((buf = malloc(path_len_b)) == NULL) {
             libarp_set_error("malloc failed");
             return ENOMEM;
         }
 
         char *path = buf;
-        char *ext = path + path_len_b;
-        char *mt = ext + node->ext_len_s + 1;
-
-        arp_resource_info_t *info = &info_arr[*cur_off];
-        *cur_off += 1;
-
         snprintf(path, path_len_b, "%s%s", running_path, node->name);
 
-        memcpy(ext, node->ext, node->ext_len_s + 1);
-        memcpy(mt, node->media_type, node->media_type_len_s + 1);
+        arp_resource_listing_t *listing = &listing_arr[*cur_off];
+        *cur_off += 1;
 
-        info->path = path;
-        info->extension = ext;
-        info->media_type = mt;
+        listing->path = path;
+        listing->meta.base_name = node->name;
+        listing->meta.extension = node->ext;
+        listing->meta.media_type = node->media_type;
 
         return 0;
     } else if (node->type == PACK_NODE_TYPE_DIRECTORY) {
@@ -1219,7 +1234,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
             }
 
             rc = _list_node_contents(child, pack_ns, new_running_path,
-                    info_arr, cur_off);
+                    listing_arr, cur_off);
 
             if (new_running_path != base_running_path) {
                 free(new_running_path);
@@ -1241,8 +1256,8 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
     }
 }
 
-int list_resources(ConstArgusPackage package, arp_resource_info_t **info_arr_out, size_t *count_out) {
-    *info_arr_out = NULL;
+int get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listing_arr_out, size_t *count_out) {
+    *listing_arr_out = NULL;
     *count_out = 0;
 
     if (package == NULL) {
@@ -1250,7 +1265,7 @@ int list_resources(ConstArgusPackage package, arp_resource_info_t **info_arr_out
         return -1;
     }
 
-    const argus_package_t *real_pack = (const argus_package_t*) package;
+    const arp_package_t *real_pack = (const arp_package_t*) package;
 
     if (real_pack->resource_count == 0) {
         libarp_set_error("Package contains no resources");
@@ -1263,8 +1278,8 @@ int list_resources(ConstArgusPackage package, arp_resource_info_t **info_arr_out
         return -1;
     }
 
-    arp_resource_info_t *info_arr = NULL;
-    if ((info_arr = calloc(real_pack->resource_count, sizeof(arp_resource_info_t))) == NULL) {
+    arp_resource_listing_t *listing_arr = NULL;
+    if ((listing_arr = calloc(real_pack->resource_count, sizeof(arp_resource_listing_t))) == NULL) {
         libarp_set_error("calloc failed");
         return ENOMEM;
     }
@@ -1272,14 +1287,28 @@ int list_resources(ConstArgusPackage package, arp_resource_info_t **info_arr_out
     int rc = 0xDEADBEEF;
 
     size_t cur_off = 0;
-    if ((rc = _list_node_contents(real_pack->all_nodes[0], real_pack->package_namespace, NULL, info_arr, &cur_off)) != 0) {
-        free(info_arr);
+    if ((rc = _list_node_contents(real_pack->all_nodes[0], real_pack->package_namespace, NULL, listing_arr, &cur_off)) != 0) {
+        free(listing_arr);
         
         return rc;
     }
 
-    *info_arr_out = info_arr;
+    *listing_arr_out = listing_arr;
     *count_out = cur_off;
 
     return 0;
+}
+
+void free_resource_listing(arp_resource_listing_t *listing, size_t count) {
+    if (listing == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        if (listing->path != NULL) {
+            free(listing->path);
+        }
+    }
+
+    free(listing);
 }

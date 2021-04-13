@@ -13,23 +13,8 @@
 
 #define ERR_MSG_MAX_LEN 4096
 
-typedef void *ArgusPackage;
+typedef void *ArpPackage;
 
-typedef const void *ConstArgusPackage;
-
-typedef struct ArpResourceInfo {
-    char *path;
-    char *base_name;
-    char *extension;
-    char *media_type;
-} arp_resource_info_t;
-
-typedef struct ArpResource {
-    arp_resource_info_t info;
-    void *data;
-    size_t len;
-
-    void *extra;
-} arp_resource_t;
+typedef const void *ConstArpPackage;
 
 const char *libarp_get_error(void);

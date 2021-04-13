@@ -13,16 +13,40 @@
 
 #include <stdlib.h>
 
-int load_package_from_file(const char *path, ArgusPackage *package);
+typedef struct ArpResourceMeta {
+    ArpPackage package;
+    char *base_name;
+    char *extension;
+    char *media_type;
+    size_t size;
 
-int load_package_from_memory(const unsigned char *data, size_t package_len, ArgusPackage *package);
+    void *extra;
+} arp_resource_meta_t;
 
-int unload_package(ArgusPackage package);
+typedef struct ArpResourceListing {
+    arp_resource_meta_t meta;
+    char *path;
+} arp_resource_listing_t;
 
-arp_resource_t *load_resource(ConstArgusPackage package, const char *path);
+typedef struct ArpResource {
+    arp_resource_meta_t meta;
+    void *data;
+} arp_resource_t;
+
+int load_package_from_file(const char *path, ArpPackage *package);
+
+int load_package_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package);
+
+int unload_package(ArpPackage package);
+
+int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta);
+
+arp_resource_t *load_resource(arp_resource_meta_t *meta);
 
 void unload_resource(arp_resource_t *resource);
 
-int unpack_arp_to_fs(ConstArgusPackage package, const char *target_dir);
+int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir);
 
-int list_resources(ConstArgusPackage package, arp_resource_info_t **info_out, size_t *count_out);
+int get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listing_out, size_t *count_out);
+
+void free_resource_listing(arp_resource_listing_t *listing, size_t count);

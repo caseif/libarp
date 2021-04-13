@@ -15,7 +15,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct NodeDesc {
+// forward decl
+struct ArpPackage;
+
+typedef struct {
+    struct ArpPackage *package;
+
     uint8_t type;
     uint16_t part_index;
     uint64_t data_off;
@@ -34,7 +39,7 @@ typedef struct NodeDesc {
     binary_tree_t children_tree;
 } node_desc_t;
 
-typedef struct ArgusPack {
+typedef struct ArpPackage {
     uint16_t major_version;
     char compression_type[PACKAGE_COMPRESSION_LEN + 1];
     char package_namespace[PACKAGE_NAMESPACE_LEN + 1];
@@ -48,4 +53,4 @@ typedef struct ArgusPack {
     uint64_t body_len;
     node_desc_t **all_nodes;
     char **part_paths;
-} argus_package_t;
+} arp_package_t;
