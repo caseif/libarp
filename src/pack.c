@@ -885,8 +885,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                         began_crc = true;
                     }
 
-                    //TODO: handle compression
-
                     dir_list_index = 0;
                     cur_body_off += sizeof(dir_listing_buffer);
                     dir_data_len += sizeof(dir_listing_buffer);
@@ -909,8 +907,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 } else {
                     crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
                 }
-
-                //TODO: handle compression
 
                 cur_body_off += write_bytes;
                 dir_data_len += write_bytes;
