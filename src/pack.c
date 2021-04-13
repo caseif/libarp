@@ -1150,11 +1150,8 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         memcpy(offset_ptr(cur_node_buf, NODE_DESC_TYPE_OFF), &arp_type_ordinal, NODE_DESC_TYPE_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PART_OFF), &node->part, NODE_DESC_PART_LEN);
         copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_OFF_OFF), &node->data_off, NODE_DESC_DATA_OFF_LEN);
-        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_DATA_LEN_OFF), &node->packed_data_len, NODE_DESC_DATA_LEN_LEN);
-        if (opts->compression_type != NULL) {
-            //TODO: implement compression
-            copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UC_DATA_LEN_OFF), &node->size, NODE_DESC_UC_DATA_LEN_LEN);
-        }
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_PACKED_DATA_LEN_OFF), &node->packed_data_len, NODE_DESC_PACKED_DATA_LEN_LEN);
+        copy_int_as_le(offset_ptr(cur_node_buf, NODE_DESC_UNPACKED_DATA_LEN_OFF), &node->size, NODE_DESC_UNPACKED_DATA_LEN_LEN);
         memcpy(offset_ptr(cur_node_buf, NODE_DESC_CRC_OFF), &node->crc, NODE_DESC_CRC_LEN);
 
         // root node must have empty name in package

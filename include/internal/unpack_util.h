@@ -24,8 +24,8 @@ typedef struct {
     uint8_t type;
     uint16_t part_index;
     uint64_t data_off;
-    uint64_t data_len;
-    uint64_t data_uc_len;
+    uint64_t packed_data_len;
+    uint64_t unpacked_data_len;
     uint32_t crc;
     uint8_t name_len_s;
     uint8_t ext_len_s;

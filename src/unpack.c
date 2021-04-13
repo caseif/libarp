@@ -440,8 +440,8 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
         _copy_int_to_field(&node->type, catalogue, NODE_DESC_TYPE_LEN, node_start + NODE_DESC_TYPE_OFF);
         _copy_int_to_field(&node->part_index, catalogue, NODE_DESC_PART_LEN, node_start + NODE_DESC_PART_OFF);
         _copy_int_to_field(&node->data_off, catalogue, NODE_DESC_DATA_OFF_LEN, node_start + NODE_DESC_DATA_OFF_OFF);
-        _copy_int_to_field(&node->data_len, catalogue, NODE_DESC_DATA_LEN_LEN, node_start + NODE_DESC_DATA_LEN_OFF);
-        _copy_int_to_field(&node->data_uc_len, catalogue, NODE_DESC_UC_DATA_LEN_LEN, node_start + NODE_DESC_UC_DATA_LEN_OFF);
+        _copy_int_to_field(&node->packed_data_len, catalogue, NODE_DESC_PACKED_DATA_LEN_LEN, node_start + NODE_DESC_PACKED_DATA_LEN_OFF);
+        _copy_int_to_field(&node->unpacked_data_len, catalogue, NODE_DESC_UNPACKED_DATA_LEN_LEN, node_start + NODE_DESC_UNPACKED_DATA_LEN_OFF);
         _copy_int_to_field(&node->crc, catalogue, NODE_DESC_CRC_LEN, node_start + NODE_DESC_CRC_OFF);
         _copy_int_to_field(&node->name_len_s, catalogue, NODE_DESC_NAME_LEN_LEN, node_start + NODE_DESC_NAME_LEN_OFF);
         _copy_int_to_field(&node->ext_len_s, catalogue, NODE_DESC_EXT_LEN_LEN, node_start + NODE_DESC_EXT_LEN_OFF);
@@ -485,12 +485,12 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
                 return -1;
             }
 
-            if ((node->data_len % 4) != 0) {
+            if ((node->packed_data_len % 4) != 0) {
                 libarp_set_error("Directory content length must be divisible by 4");
                 return -1;
             }
 
-            if (node->data_len > DIRECTORY_CONTENT_MAX_LEN) {
+            if (node->unpacked_data_len > DIRECTORY_CONTENT_MAX_LEN) {
                 libarp_set_error("Directory contains too many files");
                 return -1;
             }
@@ -518,7 +518,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
             continue;
         }
 
-        uint64_t child_count = node->data_len / 4;
+        uint64_t child_count = node->packed_data_len / 4;
         uint32_t *node_children = (uint32_t*) ((uintptr_t) body + node->data_off);
 
         if (bt_create(child_count + 1, &node->children_tree) == NULL) {
@@ -780,7 +780,7 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
         return -1;
     }
 
-    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + node->data_off + node->data_len) {
+    if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + node->data_off + node->packed_data_len) {
         fclose(part_file);
 
         libarp_set_error("Part file is too small to fit node data");
@@ -788,10 +788,7 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
     }
 
     void *final_data = NULL;
-    size_t final_data_len = node->data_len;
-    if (CMPR_ANY(pack->compression_type)) {
-        final_data_len = node->data_uc_len;
-    }
+    size_t final_data_len = node->unpacked_data_len;
     if ((final_data = malloc(final_data_len)) == NULL) {
         if (part == NULL) {
             fclose(part_file);
@@ -813,14 +810,14 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
     void *compress_data;
     if (CMPR_ANY(pack->compression_type)) {
         if (CMPR_DEFLATE(pack->compression_type)) {
-            compress_data = decompress_deflate_begin(node->data_len, node->data_uc_len);
+            compress_data = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len);
         } else {
              // should have already validated by now
             assert(false);
         }
     }
 
-    size_t remaining = node->data_len;
+    size_t remaining = node->packed_data_len;
     size_t written_bytes = 0;
     unsigned char read_buf[IO_BUFFER_LEN];
     uint32_t real_crc = 0;
@@ -960,17 +957,12 @@ int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_me
         return EISDIR;
     }
 
-    size_t res_len = node->data_len;
-    if (CMPR_ANY(real_pack->compression_type)) {
-        res_len = node->data_uc_len;
-    }
-
     arp_resource_meta_t meta;
 
     meta.base_name = node->name;
     meta.extension = node->ext;
     meta.media_type = node->media_type;
-    meta.size = node->data_len;
+    meta.size = node->unpacked_data_len;
     meta.extra = node;
 
     memcpy(out_meta, &meta, sizeof(arp_resource_meta_t));
