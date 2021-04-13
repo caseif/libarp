@@ -141,8 +141,8 @@ characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
 | `0x2` | `0x1` | Type | The type of the node. `0` for resource, `1` for directory. |
 | `0x3` | `0x2` | Part index | The index of the package part containing the resource data. For directory-type nodes, this must be `1`. |
 | `0x5` | `0x8` | Data offset | The offset of this node's data in the body section of the corresponding package part. |
-| `0xD` | `0x8` | Data length | The length of the node data in bytes. If this node is a directory, this must be a multiple of 4. |
-| `0x15` | `0x8` | Uncompressed data length | The length of the uncompressed node data in bytes. If the package does not use compression or this node is a directory, this field will be ignored. |
+| `0xD` | `0x8` | Packed data length | The length of the packed node data in bytes. If this node is a directory, this must be a multiple of 4. |
+| `0x15` | `0x8` | Unpacked data length | The length of the unpacked node data in bytes. If the package uses compression, this may be different from the packed length. |
 | `0x1D` | `0x4` | CRC | The CRC-32C checksum of the node data. |
 | `0x21` | `0x1` | Name length | The length of the node name in bytes, not including a null terminator. |
 | `0x22` | `0x1` | File extension length | The length of the node file extension, if applicable, not including a null terminator. |
