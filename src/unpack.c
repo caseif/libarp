@@ -141,7 +141,7 @@ static int _validate_package_header(const arp_package_t *pack, const size_t pack
     return 0;
 }
 
-static int _validate_part_files(arp_package_t *pack, const char *primary_path) {
+static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     char *real_path = NULL;
     #ifdef _WIN32
     real_path = _fullpath(NULL, primary_path, (size_t) -1);
@@ -606,7 +606,7 @@ int load_package_from_file(const char *path, ArpPackage *package) {
         return -1;
     }
 
-    if ((rc = _validate_part_files(pack, path)) != 0) {
+    if ((rc = _verify_parts_exist(pack, path)) != 0) {
         unload_package(pack);
         fclose(package_file);
 
@@ -751,60 +751,100 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **out_data, size_t *out_data_len,
-        FILE *part) {
-    if (node->part_index > pack->total_parts) {
-        libarp_set_error("Node part index is invalid");
-        return -1;
-    }
-
-    FILE *part_file = NULL;
-    if (part != NULL) {
-        part_file = part;
-    } else {
-        part_file = fopen(pack->part_paths[node->part_index - 1], "rb");
-        if (part_file == NULL) {
-            libarp_set_error("Failed to open part file for loading");
-            return -1;
-        }
-    }
-
+static int _validate_part_file(FILE *file, const node_desc_t *node) {
     stat_t part_stat;
-    if (fstat(fileno(part_file), &part_stat) != 0) {
-        if (part == NULL) {
-            fclose(part_file);
-        }
-
+    if (fstat(fileno(file), &part_stat) != 0) {
         libarp_set_error("Failed to stat part file");
         return -1;
     }
 
     if ((size_t) part_stat.st_size < PACKAGE_PART_HEADER_LEN + node->data_off + node->packed_data_len) {
-        fclose(part_file);
-
         libarp_set_error("Part file is too small to fit node data");
         return -1;
     }
 
-    void *final_data = NULL;
-    size_t final_data_len = node->unpacked_data_len;
-    if ((final_data = malloc(final_data_len)) == NULL) {
-        if (part == NULL) {
-            fclose(part_file);
-        }
+    return 0;
+}
 
-        libarp_set_error("malloc failed");
-        return ENOMEM;
-    }
-
+static int _seek_to_node(FILE *part_file, const node_desc_t *node) {
     size_t part_body_start = 0;
     if (node->part_index == 1) {
-        part_body_start = pack->body_off;
+        part_body_start = node->package->body_off;
     } else {
         part_body_start = PACKAGE_PART_HEADER_LEN;
     }
 
-    fseek(part_file, part_body_start + node->data_off, SEEK_SET);
+    int rc = 0xDEADBEEF;
+    if ((rc = fseek(part_file, part_body_start + node->data_off, SEEK_SET)) != 0) {
+        libarp_set_error("Failed to seek to node offset");
+        return rc;
+    }
+
+    return 0;
+}
+
+static FILE *_open_part_file_for_node(const node_desc_t *node) {
+    if (node->part_index > node->package->total_parts) {
+        libarp_set_error("Node part index is invalid");
+        return NULL;
+    }
+
+    FILE *part_file = fopen(node->package->part_paths[node->part_index - 1], "rb");
+    if (part_file == NULL) {
+        libarp_set_error("Failed to open part file for loading");
+        return NULL;
+    }
+
+    if (_validate_part_file(part_file, node) != 0) {
+        fclose(part_file);
+        return NULL;
+    }
+
+    if (_seek_to_node(part_file, node) != 0) {
+        fclose(part_file);
+        return NULL;
+    }
+
+    return part_file;
+}
+
+static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
+        void **out_data, size_t *out_data_len, FILE *part) {
+    assert((out_data != NULL) ^ (out_file != NULL)); // only one can be supplied
+
+    int rc = 0xDEADBEEF;
+
+    arp_package_t *pack = node->package;
+
+    FILE *part_file = NULL;
+    if (part != NULL) {
+        part_file = part;
+
+        if ((rc = _validate_part_file(part, node)) != 0) {
+            return rc;
+        }
+
+        if ((rc = _seek_to_node(part, node)) != 0) {
+            return rc;
+        }
+    } else {
+        if ((part_file = _open_part_file_for_node(node)) == NULL) {
+            return errno;
+        }
+    }
+    
+    void *unpacked_data = NULL;
+    size_t unpacked_data_len = node->unpacked_data_len;
+    if (out_data != NULL) {
+        if ((unpacked_data = malloc(unpacked_data_len)) == NULL) {
+            if (part == NULL) {
+                fclose(part_file);
+            }
+
+            libarp_set_error("malloc failed");
+            return ENOMEM;
+        }
+    }
 
     void *compress_data;
     if (CMPR_ANY(pack->compression_type)) {
@@ -825,7 +865,10 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
     while (remaining > 0) {
         size_t to_read = MIN(sizeof(read_buf), remaining);
         if ((fread(read_buf, to_read, 1, part_file)) != 1) {
-            free(final_data);
+            if (unpacked_data != NULL) {
+                free(unpacked_data);
+            }
+
             if (part == NULL) {
                 fclose(part_file);
             }
@@ -847,13 +890,14 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
             began_crc = true;
         }
 
-        void *final_chunk = read_buf;
-        size_t final_chunk_len = to_read;
+        void *unpacked_chunk = read_buf;
+        size_t unpacked_chunk_len = to_read;
 
         if (CMPR_ANY(pack->compression_type)) {
             if (CMPR_DEFLATE(pack->compression_type)) {
                 int rc = 0xDEADBEEF;
-                if ((rc = decompress_deflate(compress_data, read_buf, to_read, &final_chunk, &final_chunk_len)) != 0) {
+                if ((rc = decompress_deflate(compress_data, read_buf, to_read,
+                        &unpacked_chunk, &unpacked_chunk_len)) != 0) {
                     decompress_deflate_end(compress_data);
 
                     return rc;
@@ -864,11 +908,19 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
             }
         }
         
-        memcpy((void*) ((uintptr_t) final_data + written_bytes), final_chunk, final_chunk_len);
-        written_bytes += final_chunk_len;
+        if (out_file != NULL) {
+            if (fwrite(unpacked_chunk, unpacked_chunk_len, 1, out_file) != 1) {
+                libarp_set_error("Failed to write resource data to disk");
+                return errno;
+            }
+        } else {
+            memcpy((void*) ((uintptr_t) unpacked_data + written_bytes), unpacked_chunk, unpacked_chunk_len);
+        }
 
-        if (final_chunk != read_buf) {
-            free(final_chunk);
+        written_bytes += unpacked_chunk_len;
+
+        if (unpacked_chunk != read_buf) {
+            free(unpacked_chunk);
         }
     }
 
@@ -877,14 +929,20 @@ static int _load_node_data(const arp_package_t *pack, node_desc_t *node, void **
     }
 
     if (real_crc != node->crc) {
-        free(final_data);
+        if (unpacked_data != NULL) {
+            free(unpacked_data);
+        }
 
         libarp_set_error("CRC mismatch");
         return -1;
     }
 
-    *out_data = final_data;
-    *out_data_len = final_data_len;
+    if (out_data != NULL) {
+        *out_data = unpacked_data;
+    }
+    if (out_data_len != NULL) {
+        *out_data_len = unpacked_data_len;
+    }
 
     return 0;
 }
@@ -979,7 +1037,7 @@ arp_resource_t *load_resource(arp_resource_meta_t *meta) {
     void *res_data = NULL;
     size_t res_data_len = 0;
     int rc = 0;
-    if ((rc = _load_node_data(node->package, node, &res_data, &res_data_len, NULL)) != 0) {
+    if ((rc = _unpack_node_data(node, NULL, &res_data, &res_data_len, NULL)) != 0) {
         errno = rc;
         return NULL;
     }
@@ -1021,11 +1079,15 @@ void unload_resource(arp_resource_t *resource) {
     free(resource);
 }
 
-int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char *cur_dir,
+int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part);
 
-int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char *cur_dir,
+int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part) {
+    int rc = 0xDEADBEEF;
+
+    arp_package_t *pack = node->package;
+
     if (node->type == PACK_NODE_TYPE_DIRECTORY) {
         size_t new_dir_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1;
         size_t new_dir_len_b = new_dir_len_s + 1;
@@ -1063,7 +1125,7 @@ int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char 
         node_desc_t **child_ptr = NULL;
         bt_reset_iterator(&node->children_tree);
         while ((child_ptr = (node_desc_t**) bt_iterate(&node->children_tree)) != NULL) {
-            int rc = _unpack_node_to_fs(pack, *child_ptr, new_dir, last_part_index, last_part);
+            rc = _unpack_node_to_fs(*child_ptr, new_dir, last_part_index, last_part);
             if (rc != 0) {
                 return rc;
             }
@@ -1090,12 +1152,9 @@ int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char 
             }
         }
 
-        void *res_data = NULL;
-        size_t res_data_len = 0;
-
-        int rc = 0xDEADBEEF;
-        if ((rc = _load_node_data(pack, node, &res_data, &res_data_len, *last_part)) != 0) {
-            return rc;
+        FILE *part_file;
+        if ((part_file = _open_part_file_for_node(node)) == NULL) {
+            return errno;
         }
 
         size_t res_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1 + node->ext_len_s;
@@ -1103,8 +1162,6 @@ int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char 
 
         char *res_path;
         if ((res_path = malloc(res_path_len_b)) == NULL) {
-            free(res_data);
-
             libarp_set_error("malloc failed");
             return ENOMEM;
         }
@@ -1113,21 +1170,19 @@ int _unpack_node_to_fs(const arp_package_t *pack, node_desc_t *node, const char 
 
         FILE *res_file = NULL;
         if ((res_file = fopen(res_path, "w+b")) == NULL) {
-            free(res_data);
-
             libarp_set_error("Failed to open output file for resource");
             return errno;
         }
 
-        if (fwrite(res_data, res_data_len, 1, res_file) != 1) {
-            free(res_data);
+        rc = _unpack_node_data(node, res_file, NULL, NULL, *last_part);
 
-            libarp_set_error("Failed to write to output file");
-            return errno;
-        }
-
-        free(res_data);
         fclose(res_file);
+
+        if (rc != 0) {
+            unlink(res_path);
+
+            return rc;
+        }
 
         return 0;
     } else {
@@ -1146,7 +1201,7 @@ int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir) {
     FILE *last_part = NULL;
     uint16_t last_part_index = 0;
 
-    int rc = _unpack_node_to_fs(real_pack, real_pack->all_nodes[0], target_dir, &last_part_index, &last_part);
+    int rc = _unpack_node_to_fs(real_pack->all_nodes[0], target_dir, &last_part_index, &last_part);
 
     if (last_part != NULL) {
         fclose(last_part);
