@@ -431,6 +431,8 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
             return -1;
         }
 
+        node->loaded_data = NULL;
+
         pack->all_nodes[i] = node;
 
         node->package = pack;
@@ -1086,6 +1088,8 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part) {
     int rc = 0xDEADBEEF;
 
+    assert((last_part == NULL) == (last_part_index == NULL));
+
     arp_package_t *pack = node->package;
 
     if (node->type == PACK_NODE_TYPE_DIRECTORY) {
@@ -1140,21 +1144,26 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
             return -1;
         }
 
-        if (*last_part != NULL && node->part_index != *last_part_index) {
+        if (last_part != NULL && *last_part != NULL && node->part_index != *last_part_index) {
             fclose(*last_part);
         }
 
-        if (node->part_index != *last_part_index) {
-            *last_part_index = node->part_index;
-            if ((*last_part = fopen(pack->part_paths[node->part_index - 1], "rb")) == NULL) {
-                libarp_set_error("Failed to open part file for unpacking");
+        FILE *cur_part;
+
+        if (last_part_index == NULL || node->part_index != *last_part_index) {
+            if (last_part_index != NULL) {
+                *last_part_index = node->part_index;
+            }
+
+            if ((cur_part = _open_part_file_for_node(node)) == NULL) {
                 return errno;
             }
-        }
 
-        FILE *part_file;
-        if ((part_file = _open_part_file_for_node(node)) == NULL) {
-            return errno;
+            if (last_part != NULL) {
+                *last_part = cur_part;
+            }
+        } else {
+            cur_part = *last_part;
         }
 
         size_t res_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1 + node->ext_len_s;
@@ -1162,6 +1171,10 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         char *res_path;
         if ((res_path = malloc(res_path_len_b)) == NULL) {
+            if (last_part == NULL) {
+                fclose(cur_part);
+            }
+
             libarp_set_error("malloc failed");
             return ENOMEM;
         }
@@ -1170,13 +1183,21 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         FILE *res_file = NULL;
         if ((res_file = fopen(res_path, "w+b")) == NULL) {
+            if (last_part == NULL) {
+                fclose(cur_part);
+            }
+
             libarp_set_error("Failed to open output file for resource");
             return errno;
         }
 
-        rc = _unpack_node_data(node, res_file, NULL, NULL, *last_part);
+        rc = _unpack_node_data(node, res_file, NULL, NULL, cur_part);
 
         fclose(res_file);
+
+        if (last_part == NULL) {
+            fclose(cur_part);
+        }
 
         if (rc != 0) {
             unlink(res_path);
@@ -1186,7 +1207,8 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         return 0;
     } else {
-        assert(false);
+        libarp_set_error("Encountered invalid node type");
+        return EINVAL;
     }
 }
 
@@ -1208,6 +1230,10 @@ int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir) {
     }
 
     return rc;
+}
+
+int unpack_resource_to_fs(const arp_resource_meta_t *meta, const char *target_dir) {
+    return _unpack_node_to_fs((node_desc_t*) meta->extra, target_dir, NULL, NULL);
 }
 
 int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path,
