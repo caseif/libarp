@@ -954,7 +954,12 @@ int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_me
 
     size_t path_len_s = strlen(path);
 
-    char *path_copy = malloc(path_len_s + 1);
+    char *path_copy = NULL;
+    if ((path_copy = malloc(path_len_s + 1)) == NULL) {
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
     memcpy(path_copy, path, path_len_s + 1);
     char *path_tail = path_copy;
     size_t cursor = 0;
