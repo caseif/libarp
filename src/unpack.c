@@ -1086,6 +1086,88 @@ void unload_resource(arp_resource_t *resource) {
     free(resource);
 }
 
+ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len) {
+    if (chunk_len == 0 || chunk_len > INT_MAX) {
+        libarp_set_error("Streaming chunk length must be between 1 and 2147483647 bytes");
+    }
+
+    const node_desc_t *node = (node_desc_t*) meta->extra;
+
+    arp_resource_stream_t *stream = NULL;
+    if ((stream = malloc(sizeof(arp_resource_stream_t))) == NULL) {
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    memcpy(&stream->meta, meta, sizeof(arp_resource_meta_t));
+    stream->chunk_len = chunk_len;
+    stream->pos = 0;
+    stream->next_buf = 0;
+    stream->overflow_len = 0;
+    stream->overflow_cap = 0;
+    stream->overflow_buf = NULL;
+
+    size_t res_base_off = 0;
+    if (node->part_index == 1) {
+        res_base_off = node->package->body_off;
+    } else {
+        res_base_off = PACKAGE_PART_HEADER_LEN;
+    }
+
+    res_base_off += node->data_off;
+
+    if ((stream->file = _open_part_file_for_node(node)) == NULL) {
+        return errno;
+    }
+
+    if ((stream->prim_buf = malloc(chunk_len)) == NULL) {
+        fclose(stream->file);
+        free(stream);
+
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    if ((stream->sec_buf = malloc(chunk_len)) == NULL) {
+        free(stream->prim_buf);
+        fclose(stream->file);
+        free(stream);
+
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    if ((stream->tert_buf = malloc(chunk_len)) == NULL) {
+        free(stream->sec_buf);
+        free(stream->prim_buf);
+        fclose(stream->file);
+        free(stream);
+
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+}
+
+int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len) {
+    //TODO
+}
+
+void free_resource_stream(ArpResourceStream stream) {
+    arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
+
+    if (real_stream->overflow_buf != NULL) {
+        free(real_stream->overflow_buf);
+    }
+
+    free(real_stream->prim_buf);
+    free(real_stream->sec_buf);
+    free(real_stream->tert_buf);
+
+    fclose(real_stream->file);
+
+    free(real_stream);
+}
+
 int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part);
 

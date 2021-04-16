@@ -18,7 +18,7 @@
 // forward decl
 struct ArpPackage;
 
-typedef struct {
+typedef struct NodeDesc {
     struct ArpPackage *package;
 
     uint8_t type;
@@ -54,3 +54,23 @@ typedef struct ArpPackage {
     node_desc_t **all_nodes;
     char **part_paths;
 } arp_package_t;
+
+typedef struct ArpResourceStream {
+    // intrinsic properties
+    size_t chunk_len;
+    arp_resource_meta_t meta;
+
+    // buffers
+    void *prim_buf;
+    void *sec_buf;
+    void *tert_buf;
+    void *overflow_buf;
+    size_t overflow_len;
+    size_t overflow_cap;
+
+    // state
+    FILE *file;
+    size_t base_off;
+    size_t pos;
+    unsigned char next_buf; // the next buffer to load data into
+} arp_resource_stream_t;

@@ -13,6 +13,10 @@
 
 #include <stdlib.h>
 
+#define ARP_STREAM_EOF 0xDEADDEAD
+
+typedef void *ArpResourceStream;
+
 typedef struct ArpResourceMeta {
     ArpPackage package;
     char *base_name;
@@ -44,6 +48,12 @@ int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_me
 arp_resource_t *load_resource(arp_resource_meta_t *meta);
 
 void unload_resource(arp_resource_t *resource);
+
+ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len);
+
+int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len);
+
+void free_resource_stream(ArpResourceStream stream);
 
 int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir);
 
