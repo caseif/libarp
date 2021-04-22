@@ -839,6 +839,7 @@ static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
     size_t unpacked_data_len = node->unpacked_data_len;
     if (out_data != NULL) {
         if ((unpacked_data = malloc(unpacked_data_len)) == NULL) {
+            //TODO: maybe handle a malloc failure specially here
             if (part == NULL) {
                 fclose(part_file);
             }
@@ -1096,12 +1097,14 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
     arp_resource_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(arp_resource_stream_t))) == NULL) {
         libarp_set_error("malloc failed");
-        return ENOMEM;
+        errno = ENOMEM;
+        return NULL;
     }
 
     memcpy(&stream->meta, meta, sizeof(arp_resource_meta_t));
     stream->chunk_len = chunk_len;
-    stream->pos = 0;
+    stream->packed_pos = 0;
+    stream->unpacked_pos = 0;
     stream->next_buf = 0;
     stream->overflow_len = 0;
     stream->overflow_cap = 0;
@@ -1117,7 +1120,7 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
     res_base_off += node->data_off;
 
     if ((stream->file = _open_part_file_for_node(node)) == NULL) {
-        return errno;
+        return NULL;
     }
 
     if ((stream->prim_buf = malloc(chunk_len)) == NULL) {
@@ -1125,7 +1128,8 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
         free(stream);
 
         libarp_set_error("malloc failed");
-        return ENOMEM;
+        errno = ENOMEM;
+        return NULL;
     }
 
     if ((stream->sec_buf = malloc(chunk_len)) == NULL) {
@@ -1134,7 +1138,8 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
         free(stream);
 
         libarp_set_error("malloc failed");
-        return ENOMEM;
+        errno = ENOMEM;
+        return NULL;
     }
 
     if ((stream->tert_buf = malloc(chunk_len)) == NULL) {
@@ -1144,12 +1149,174 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
         free(stream);
 
         libarp_set_error("malloc failed");
-        return ENOMEM;
+        errno = ENOMEM;
+        return NULL;
     }
+
+    return stream;
 }
 
 int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len) {
-    //TODO
+    arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
+    arp_package_t *pack = (arp_package_t*) real_stream->meta.package;
+    node_desc_t *node = (node_desc_t*) real_stream->meta.extra;
+
+    void *target_buf = NULL;
+    switch (real_stream->next_buf) {
+        case 0:
+            target_buf = real_stream->prim_buf;
+            break;
+        case 1:
+            target_buf = real_stream->sec_buf;
+            break;
+        case 2:
+            target_buf = real_stream->tert_buf;
+            break;
+    }
+
+    size_t unread_packed_bytes = node->packed_data_len - real_stream->packed_pos;
+
+    size_t unread_unpacked_bytes = node->unpacked_data_len - real_stream->unpacked_pos;
+    size_t unstreamed_unpacked_bytes = unread_unpacked_bytes + real_stream->overflow_len;
+
+    size_t total_required_out = MIN(real_stream->chunk_len, unstreamed_unpacked_bytes);
+
+    if (real_stream->overflow_len >= total_required_out) {
+        // we already have all the data we need in the overflow buffer
+
+        memcpy(target_buf, real_stream->overflow_buf, total_required_out);
+
+        size_t extra_overflow = real_stream->overflow_len - total_required_out;
+        void *extra_start = (void*) ((uintptr_t) real_stream->overflow_buf + total_required_out);
+
+        if (extra_overflow > 0) {
+             if (extra_overflow > total_required_out) {
+                void *intermediate_buf = NULL;
+                if ((intermediate_buf = malloc(extra_overflow)) == NULL) {
+                    libarp_set_error("malloc failed");
+                    return ENOMEM;
+                }
+
+                memcpy(intermediate_buf, extra_start, extra_overflow);
+                memcpy(real_stream->overflow_buf, intermediate_buf, extra_overflow);
+
+                free(intermediate_buf);
+            } else {
+                // can copy directly to the beginning of the overflow buffer
+                memcpy(real_stream->overflow_buf, extra_start, extra_overflow);
+            }
+        }
+
+        real_stream->overflow_len -= total_required_out;
+    } else {
+        // we need to read at least some data from disk
+
+        // we account for the data already in the overflow buffer to hopefully minimize the utilization of it
+        size_t max_to_read = total_required_out - real_stream->overflow_len;
+        if (CMPR_ANY(node->package->compression_type)) {
+            // include a small buffer space to allow efficient processing of uncompressible data
+            max_to_read *= 1.02f;
+        }
+
+        size_t output_buf_off = 0;
+
+        if (real_stream->overflow_len > 0) {
+            memcpy(target_buf, real_stream->overflow_buf, real_stream->overflow_len);
+            output_buf_off = real_stream->overflow_len;
+            real_stream->overflow_len = 0;
+        }
+
+        size_t to_read = MIN(max_to_read, unread_packed_bytes);
+
+        void *compression_data = NULL;
+        if (CMPR_ANY(pack->compression_type)) {
+            if (CMPR_DEFLATE(pack->compression_type)) {
+                // we can provide 0 for both args since they're only used for
+                // sanity-checking, and 0 causes the checks to be skipped
+                if ((compression_data = decompress_deflate_begin(0, 0)) == NULL) {
+                    return errno;
+                }
+            } else {
+                assert(false);
+            }
+        }
+
+        size_t remaining_needed = total_required_out;
+
+        unsigned char read_buf[IO_BUFFER_LEN];
+        size_t read_bytes = 0;
+        while ((read_bytes = fread(read_buf, 1, MIN(sizeof(read_buf), to_read), real_stream->file)) > 0){
+            size_t copied_bytes = read_bytes;
+
+            void *offset_buf = (void*) ((uintptr_t) target_buf + output_buf_off);
+
+            if (CMPR_ANY(pack->compression_type)) {
+                if (CMPR_DEFLATE(pack->compression_type)) {
+                    void *unpack_buf = NULL;
+                    size_t unpacked_len = 0;
+                    decompress_deflate(compression_data, read_buf, read_bytes, &unpack_buf, &unpacked_len);
+
+                    if (unpacked_len > remaining_needed) {
+                        size_t overflowed_bytes = unpacked_len - remaining_needed;
+                        void *overflow_start = (void*) ((uintptr_t) unpack_buf + remaining_needed);
+                        if (real_stream->overflow_cap == 0) {
+                            // we multiply by 2 to hopefully avoid having to realloc later in the stream
+                            if ((real_stream->overflow_buf = malloc(overflowed_bytes * 2)) == NULL) {
+                                libarp_set_error("malloc failed");
+                                return ENOMEM;
+                            }
+                        } else if (real_stream->overflow_cap - real_stream->overflow_len < overflowed_bytes) {
+                            size_t extra_needed = overflowed_bytes
+                                    - (real_stream->overflow_cap - real_stream->overflow_len);
+                            void *new_overflow_buf = realloc(real_stream->overflow_buf,
+                                    real_stream->overflow_cap + extra_needed);
+                            if (new_overflow_buf == NULL) {
+                                libarp_set_error("realloc failed");
+                                return ENOMEM;
+                            }
+                            real_stream->overflow_buf = new_overflow_buf;
+                        }
+
+                        void *offset_overflow_buf = (void*) ((uintptr_t) real_stream->overflow_buf
+                                + real_stream->overflow_len);
+                        memcpy(offset_overflow_buf, overflow_start, overflowed_bytes);
+                    }
+
+                    copied_bytes = MIN(unpacked_len, remaining_needed);
+                    memcpy(offset_buf, unpack_buf, copied_bytes);
+
+                    free(unpack_buf);
+                } else {
+                    assert(false);
+                }
+            } else {
+                memcpy(offset_buf, read_buf, read_bytes);
+            }
+
+            remaining_needed -= copied_bytes;
+            output_buf_off += copied_bytes;
+        }
+
+        if (CMPR_ANY(pack->compression_type)) {
+            if (CMPR_DEFLATE(pack->compression_type)) {
+                decompress_deflate_end(compression_data);
+            } else {
+                assert(false);
+            }
+        }
+
+        real_stream->next_buf += 1;
+    }
+
+    // loop back around to 0 if required since we only have 3 buffers
+    real_stream->next_buf = (real_stream->next_buf + 1) % 3;
+
+    // we don't update the pos fields because we didn't read anything from disk
+
+    *out_data = target_buf;
+    *out_data_len = total_required_out;
+
+    return 0;
 }
 
 void free_resource_stream(ArpResourceStream stream) {

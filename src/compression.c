@@ -224,7 +224,8 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
 
             size_t out_bytes = sizeof(real_stream->out_buf) - defl_stream->avail_out;
 
-            if (total_out_bytes + out_bytes > real_stream->total_output_bytes) {
+            if (real_stream->total_output_bytes != 0
+                    && total_out_bytes + out_bytes > real_stream->total_output_bytes) {
                 free(output_buf);
 
                 libarp_set_error("Decompressed data exceeds expected length");
@@ -255,7 +256,8 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
 
     end_inflate_loop:
 
-    if (real_stream->processed_bytes == real_stream->total_output_bytes && !at_end) {
+    if (real_stream->total_output_bytes != 0
+            && real_stream->processed_bytes == real_stream->total_output_bytes && !at_end) {
         free(output_buf);
 
         libarp_set_error("DEFLATE stream is incomplete");

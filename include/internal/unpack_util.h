@@ -14,6 +14,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // forward decl
 struct ArpPackage;
@@ -61,16 +62,18 @@ typedef struct ArpResourceStream {
     arp_resource_meta_t meta;
 
     // buffers
-    void *prim_buf;
-    void *sec_buf;
-    void *tert_buf;
-    void *overflow_buf;
+    void *read_buf; // length == chunk_len
+    void *prim_buf; // length == chunk_len
+    void *sec_buf; // length == chunk_len
+    void *tert_buf; // length == chunk_len
+    void *overflow_buf; // length == variable
     size_t overflow_len;
     size_t overflow_cap;
 
     // state
     FILE *file;
     size_t base_off;
-    size_t pos;
+    size_t packed_pos; // total number of packed bytes read
+    size_t unpacked_pos; // total number of unpacked bytes read, including data written to overflow_buf
     unsigned char next_buf; // the next buffer to load data into
 } arp_resource_stream_t;
