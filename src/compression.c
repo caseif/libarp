@@ -202,6 +202,9 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
 
             rc = inflate(defl_stream, Z_NO_FLUSH);
             switch (rc) {
+                case Z_OK:
+                case Z_BUF_ERROR:
+                    break;
                 case Z_STREAM_END:
                     if (remaining > 0) {
                         free(output_buf);
@@ -219,7 +222,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                     free(output_buf);
 
                     libarp_set_error("zlib: Inflate failed");
-                    return -1;
+                    return rc;
             }
 
             size_t out_bytes = sizeof(real_stream->out_buf) - defl_stream->avail_out;
@@ -248,7 +251,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
             memcpy((void*) ((uintptr_t) output_buf + total_out_bytes), real_stream->out_buf, out_bytes);
             total_out_bytes += out_bytes;
 
-            if (at_end) {
+            if (at_end || remaining == 0) {
                 goto end_inflate_loop; // ew
             }
         } while (defl_stream->avail_out > 0);

@@ -1024,6 +1024,7 @@ int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_me
 
     arp_resource_meta_t meta;
 
+    meta.package = node->package;
     meta.base_name = node->name;
     meta.extension = node->ext;
     meta.media_type = node->media_type;
@@ -1153,13 +1154,34 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
         return NULL;
     }
 
+    if (CMPR_ANY(node->package->compression_type)) {
+        if (CMPR_DEFLATE(node->package->compression_type)) {
+            if ((stream->compression_data
+                    = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len)) == NULL) {
+                free(stream->sec_buf);
+                free(stream->prim_buf);
+                fclose(stream->file);
+                free(stream);
+
+                return NULL;
+            }
+        } else {
+            assert(false);
+        }
+    }
+
     return stream;
 }
 
 int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len) {
     arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
-    arp_package_t *pack = (arp_package_t*) real_stream->meta.package;
+
     node_desc_t *node = (node_desc_t*) real_stream->meta.extra;
+    arp_package_t *pack = (arp_package_t*) real_stream->meta.package;
+
+    if (real_stream->unpacked_pos == node->unpacked_data_len) {
+        return ARP_STREAM_EOF;
+    }
 
     void *target_buf = NULL;
     switch (real_stream->next_buf) {
@@ -1180,6 +1202,9 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
     size_t unstreamed_unpacked_bytes = unread_unpacked_bytes + real_stream->overflow_len;
 
     size_t total_required_out = MIN(real_stream->chunk_len, unstreamed_unpacked_bytes);
+    size_t required_from_disk = real_stream->overflow_len >= total_required_out
+            ? 0
+            : total_required_out - real_stream->overflow_len;
 
     if (real_stream->overflow_len >= total_required_out) {
         // we already have all the data we need in the overflow buffer
@@ -1212,7 +1237,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
         // we need to read at least some data from disk
 
         // we account for the data already in the overflow buffer to hopefully minimize the utilization of it
-        size_t max_to_read = total_required_out - real_stream->overflow_len;
+        size_t max_to_read = required_from_disk;
         if (CMPR_ANY(node->package->compression_type)) {
             // include a small buffer space to allow efficient processing of uncompressible data
             max_to_read *= 1.02f;
@@ -1220,33 +1245,27 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
 
         size_t output_buf_off = 0;
 
+        size_t remaining_needed = total_required_out;
+
         if (real_stream->overflow_len > 0) {
+            // we comsume the whole overflow buffer because it's guaranteed to
+            // be less than the required output length
             memcpy(target_buf, real_stream->overflow_buf, real_stream->overflow_len);
             output_buf_off = real_stream->overflow_len;
+            remaining_needed -= real_stream->overflow_len;
+
             real_stream->overflow_len = 0;
         }
 
         size_t to_read = MIN(max_to_read, unread_packed_bytes);
 
-        void *compression_data = NULL;
-        if (CMPR_ANY(pack->compression_type)) {
-            if (CMPR_DEFLATE(pack->compression_type)) {
-                // we can provide 0 for both args since they're only used for
-                // sanity-checking, and 0 causes the checks to be skipped
-                if ((compression_data = decompress_deflate_begin(0, 0)) == NULL) {
-                    return errno;
-                }
-            } else {
-                assert(false);
-            }
-        }
-
-        size_t remaining_needed = total_required_out;
-
         unsigned char read_buf[IO_BUFFER_LEN];
         size_t read_bytes = 0;
-        while ((read_bytes = fread(read_buf, 1, MIN(sizeof(read_buf), to_read), real_stream->file)) > 0){
+        while (remaining_needed > 0
+                && (read_bytes = fread(read_buf, 1, MIN(sizeof(read_buf), to_read), real_stream->file)) > 0) {
+            size_t read_bytes_unpacked = read_bytes;
             size_t copied_bytes = read_bytes;
+            to_read -= read_bytes;
 
             void *offset_buf = (void*) ((uintptr_t) target_buf + output_buf_off);
 
@@ -1254,7 +1273,11 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
                 if (CMPR_DEFLATE(pack->compression_type)) {
                     void *unpack_buf = NULL;
                     size_t unpacked_len = 0;
-                    decompress_deflate(compression_data, read_buf, read_bytes, &unpack_buf, &unpacked_len);
+                    int rc = 0;
+                    if ((rc = decompress_deflate(real_stream->compression_data, read_buf, read_bytes,
+                            &unpack_buf, &unpacked_len) != 0)) {
+                        return rc;
+                    }
 
                     if (unpacked_len > remaining_needed) {
                         size_t overflowed_bytes = unpacked_len - remaining_needed;
@@ -1280,12 +1303,16 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
                         void *offset_overflow_buf = (void*) ((uintptr_t) real_stream->overflow_buf
                                 + real_stream->overflow_len);
                         memcpy(offset_overflow_buf, overflow_start, overflowed_bytes);
+
+                        real_stream->overflow_len += overflowed_bytes;
                     }
 
                     copied_bytes = MIN(unpacked_len, remaining_needed);
                     memcpy(offset_buf, unpack_buf, copied_bytes);
 
                     free(unpack_buf);
+
+                    read_bytes_unpacked = unpacked_len;
                 } else {
                     assert(false);
                 }
@@ -1295,14 +1322,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
 
             remaining_needed -= copied_bytes;
             output_buf_off += copied_bytes;
-        }
-
-        if (CMPR_ANY(pack->compression_type)) {
-            if (CMPR_DEFLATE(pack->compression_type)) {
-                decompress_deflate_end(compression_data);
-            } else {
-                assert(false);
-            }
+            real_stream->unpacked_pos += read_bytes_unpacked;
         }
 
         real_stream->next_buf += 1;
@@ -1321,6 +1341,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
 
 void free_resource_stream(ArpResourceStream stream) {
     arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
+    node_desc_t *node = (node_desc_t*) real_stream->meta.extra;
 
     if (real_stream->overflow_buf != NULL) {
         free(real_stream->overflow_buf);
@@ -1331,6 +1352,14 @@ void free_resource_stream(ArpResourceStream stream) {
     free(real_stream->tert_buf);
 
     fclose(real_stream->file);
+
+    if (CMPR_ANY(node->package->compression_type)) {
+        if (CMPR_DEFLATE(node->package->compression_type)) {
+            decompress_deflate_end(real_stream->compression_data);
+        } else {
+            assert(false);
+        }
+    }
 
     free(real_stream);
 }

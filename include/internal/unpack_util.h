@@ -76,4 +76,5 @@ typedef struct ArpResourceStream {
     size_t packed_pos; // total number of packed bytes read
     size_t unpacked_pos; // total number of unpacked bytes read, including data written to overflow_buf
     unsigned char next_buf; // the next buffer to load data into
+    void *compression_data;
 } arp_resource_stream_t;
