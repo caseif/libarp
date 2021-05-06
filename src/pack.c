@@ -906,6 +906,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                     crc = crc32c_cont(crc, dir_listing_buffer, sizeof(dir_listing_buffer));
                 } else {
                     crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
+                    began_crc = true;
                 }
 
                 cur_body_off += write_bytes;
