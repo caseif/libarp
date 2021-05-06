@@ -149,6 +149,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     real_path = realpath(primary_path, NULL);
     #endif
     if (real_path == NULL) {
+        free(real_path);
+
         libarp_set_error("Failed to get absolute path of package file");
         return -1;
     }
@@ -177,6 +179,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     size_t file_base_len_s = strlen(file_base);
 
     if (memcmp(file_base + file_base_len_s - strlen("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
+        free(real_path);
+
         libarp_set_error("Unexpected file extension for primary package file");
         return -1;
     }
@@ -185,6 +189,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     size_t stem_len_b = stem_len_s + 1;
     char *file_stem = NULL;
     if ((file_stem = malloc(stem_len_b)) == NULL) {
+        free(real_path);
+
         libarp_set_error("malloc failed");
         return -1;
     }
@@ -199,6 +205,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
+            free(real_path);
             
             libarp_set_error("malloc failed");
             return -1;
@@ -210,6 +217,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
+        free(real_path);
             
             libarp_set_error("malloc failed");
             return -1;
@@ -226,6 +234,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if ((file_stem_new = realloc(file_stem, stem_len_b)) == NULL) {
             free(parent_dir);
             free(file_stem);
+        free(real_path);
 
             libarp_set_error("realloc failed");
             return -1;
@@ -238,12 +247,15 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     if ((pack->part_paths[0] = malloc(real_path_len_b)) == NULL) {
         free(parent_dir);
         free(file_stem);
+        free(real_path);
 
         libarp_set_error("malloc failed");
         return -1;
     }
 
     memcpy(pack->part_paths[0], real_path, real_path_len_b);
+
+    free(real_path);
 
     int rc = 0xDEADBEEF;
 
@@ -431,6 +443,8 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
             return -1;
         }
 
+        node->children_tree.initialized = false;
+
         node->loaded_data = NULL;
 
         pack->all_nodes[i] = node;
@@ -443,7 +457,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
         _copy_int_to_field(&node->data_off, catalogue, ND_DATA_OFF_LEN, node_start + ND_DATA_OFF_OFF);
         _copy_int_to_field(&node->packed_data_len, catalogue, ND_PACKED_DATA_LEN_LEN, node_start + ND_PACKED_DATA_LEN_OFF);
         _copy_int_to_field(&node->unpacked_data_len, catalogue, ND_UNPACKED_DATA_LEN_LEN, node_start + ND_UNPACKED_DATA_LEN_OFF);
-        _copy_int_to_field(&node->crc, catalogue, ND_CRC_LEN, node_start + ND_CRC_OFF);
+        memcpy(&node->crc, catalogue + node_start + ND_CRC_OFF, ND_CRC_LEN);
         _copy_int_to_field(&node->name_len_s, catalogue, ND_NAME_LEN_LEN, node_start + ND_NAME_LEN_OFF);
         _copy_int_to_field(&node->ext_len_s, catalogue, ND_EXT_LEN_LEN, node_start + ND_EXT_LEN_OFF);
         _copy_int_to_field(&node->media_type_len_s, catalogue, ND_MT_LEN_LEN, node_start + ND_MT_LEN_OFF);
@@ -1452,7 +1466,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         size_t res_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1 + node->ext_len_s;
         size_t res_path_len_b = res_path_len_s + 1;
 
-        char *res_path;
+        char *res_path = NULL;
         if ((res_path = malloc(res_path_len_b)) == NULL) {
             if (last_part == NULL) {
                 fclose(cur_part);
@@ -1466,6 +1480,8 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         FILE *res_file = NULL;
         if ((res_file = fopen(res_path, "w+b")) == NULL) {
+            free(res_path);
+
             if (last_part == NULL) {
                 fclose(cur_part);
             }
@@ -1484,9 +1500,12 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         if (rc != 0) {
             unlink(res_path);
+            free(res_path);
 
             return rc;
         }
+
+        free(res_path);
 
         return 0;
     } else {

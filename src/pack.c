@@ -92,7 +92,7 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     return opts;
 }
 
-void release_packing_options(ArpPackingOptions opts) {
+void free_packing_options(ArpPackingOptions opts) {
     if (opts == NULL) {
         return;
     }
@@ -105,10 +105,6 @@ void release_packing_options(ArpPackingOptions opts) {
 
     if (real_opts->pack_namespace != NULL) {
         free(real_opts->pack_namespace);
-    }
-
-    if (real_opts->compression_type != NULL) {
-        free(real_opts->compression_type);
     }
 
     if (real_opts->media_types_path != NULL) {
@@ -181,6 +177,10 @@ static void _free_fs_node(fs_node_ptr node) {
 
     if (node->file_ext != NULL) {
         free(node->file_ext);
+    }
+
+    if (node->media_type != NULL) {
+        free(node->media_type);
     }
 
     if (node->target_path != NULL) {
@@ -1099,11 +1099,11 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
     }
 
     unsigned char cat_buf[IO_BUFFER_LEN];
-    size_t cat_buf_off = 0;
+    size_t cat_buf_len = 0;
     for (size_t i = 0; i < sizes->node_count; i++) {
-        // flush catalogue buffer if it's going to overflow this iteration
-        if (cat_buf_off + NODE_DESC_MAX_LEN > IO_BUFFER_LEN) {
-            if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
+        // flush catalogue buffer if it's potentially going to overflow this iteration
+        if (cat_buf_len + NODE_DESC_MAX_LEN > IO_BUFFER_LEN) {
+            if (fwrite(cat_buf, cat_buf_len, 1, first_part_file) != 1) {
                 fclose(first_part_file);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
@@ -1111,7 +1111,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 return -1;
             }
 
-            cat_buf_off = 0;
+            cat_buf_len = 0;
         }
 
         fs_node_ptr node = fs_flat[i];
@@ -1181,13 +1181,24 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         // write descriptor length
         copy_int_as_le(offset_ptr(cur_node_buf, ND_LEN_OFF), &desc_len, ND_LEN_LEN);
 
-        memcpy(offset_ptr(cat_buf, cat_buf_off), cur_node_buf, desc_len);
+        memcpy(offset_ptr(cat_buf, cat_buf_len), cur_node_buf, desc_len);
 
-        cat_buf_off += desc_len;
+        cat_buf_len += desc_len;
     }
 
-    if (cat_buf_off != 0) {
-        if (fwrite(cat_buf, cat_buf_off, 1, first_part_file) != 1) {
+    // valgrind throws a really persistent false positive somewhere around here
+    // when trying to write the buffer to disk. It thinks the CRC value of each
+    // fs_node_t is somehow uninitialized, and copying it into the buffer above
+    // results in the written buffer containing "uninitialized" bytes as well.
+    // This is, of course, impossible, because the CRC is definitely being set
+    // in all cases, and even if it weren't, the whole fs_node_t is being
+    // calloced. valgrind, not to be deterred by reality, merrily continues to
+    // insist that this is a genuine bug and there is literally no way to
+    // suppress it (to my knowledge) besides just not copying the CRC (or
+    // otherwise blanking the CRC bytes after they'be been copied).
+
+    if (cat_buf_len != 0) {
+        if (fwrite(cat_buf, cat_buf_len, 1, first_part_file) != 1) {
             fclose(first_part_file);
             _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
@@ -1337,6 +1348,8 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
         return rc;
     }
 
+    free_csv(media_types);
+
     _emit_message(msg_callback, "Computing package parameters");
 
     package_important_sizes_t sizes;
@@ -1363,10 +1376,12 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
 
     _emit_message(msg_callback, "Writing package contents");
 
-    _write_package_contents_to_disk(fs_flat, output_dir, real_opts, &sizes);
+    rc = _write_package_contents_to_disk(fs_flat, output_dir, real_opts, &sizes);
+
+    _free_fs_node(fs_tree);
 
     free(fs_flat);
     free(media_types);
 
-    return 0;
+    return rc;
 }

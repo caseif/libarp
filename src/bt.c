@@ -155,18 +155,20 @@ binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out) {
     tree->root = NULL;
     stack_create(sizeof(void*), tree->capacity, tree->capacity, &tree->it_stack);
 
+    tree->initialized = true;
+
     return tree;
 }
 
 void bt_free(binary_tree_t *tree) {
     free(tree->storage);
+    stack_free(&tree->it_stack);
 
     if (tree->malloced) {
         free(tree);
     }
 }
 
-//TODO: this creates a degenerate tree
 void bt_insert(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn) {
     assert(tree->count < tree->capacity);
 
