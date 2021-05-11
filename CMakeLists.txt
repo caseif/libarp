@@ -27,9 +27,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 SET(IS_TARGET_x86 0)
-if(MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "AMD64")
+if(MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "AMD64")
   set(IS_TARGET_X86 1)
-elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
   set(IS_TARGET_X86 1)
 endif()
 
@@ -37,14 +37,16 @@ endif()
 set(TMP_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include.tmp")
 
 set(EXT_LIBS "")
+set(EXT_LIBS_STATIC "")
 
 set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
 configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
 set(ZLIB_LIBRARY "zlib")
+set(ZLIB_LIBRARY_STATIC "zlibstatic")
 set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_INCLUDE_DIR "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
 add_subdirectory("${ZLIB_SOURCE_DIR}")
-set_target_properties(zlibstatic minigzip example
+set_target_properties(minigzip example
                         PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 if(TARGET minigzip64)
   set_target_properties(minigzip64 example64
@@ -52,6 +54,7 @@ if(TARGET minigzip64)
 endif()
 add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
+list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
 
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 set(INC_DIR "${PROJECT_SOURCE_DIR}/include")
@@ -105,32 +108,53 @@ add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
     copy_directory "${INC_DIR}/${PROJECT_NAME}/" "${HDR_OUT_DIR}/${PROJECT_NAME}/")
 
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
+add_library("${PROJECT_NAME}_static" STATIC ${C_FILES} ${H_FILES})
 
 target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR}")
+target_include_directories("${PROJECT_NAME}_static" PUBLIC "${INC_DIR}")
 
 if(${LIBARP_FEATURE_DEFLATE})
   target_include_directories("${PROJECT_NAME}" PUBLIC "${ZLIB_INCLUDE_DIR}")
+  target_include_directories("${PROJECT_NAME}_static" PUBLIC "${ZLIB_INCLUDE_DIR}")
 endif()
 
 target_link_libraries("${PROJECT_NAME}" "${EXT_LIBS}")
+target_link_libraries("${PROJECT_NAME}_static" "${EXT_LIBS_STATIC}")
 
 # set the C standard
-set_target_properties(${PROJECT_NAME} PROPERTIES C_STANDARD 11)
+set_target_properties("${PROJECT_NAME}" PROPERTIES C_STANDARD 11)
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES C_STANDARD 11)
 # enable PIC
-set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties("${PROJECT_NAME}" PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # export all symbols (required on Windows)
-set_target_properties(${PROJECT_NAME} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set_target_properties("${PROJECT_NAME}" PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # set target name
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${LIBRARY_BASE_NAME})
+set_target_properties("${PROJECT_NAME}" PROPERTIES OUTPUT_NAME ${LIBRARY_BASE_NAME})
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES OUTPUT_NAME ${LIBRARY_BASE_NAME})
+# set shared library parameters
+set_target_properties("${PROJECT_NAME}" PROPERTIES VERSION ${PROJECT_VERSION})
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES VERSION ${PROJECT_VERSION})
+set_target_properties("${PROJECT_NAME}" PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR})
+
+set_target_properties("${PROJECT_NAME}" PROPERTIES DEBUG_POSTFIX "d")
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES DEBUG_POSTFIX "d")
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  set_target_properties(${PROJECT_NAME} PROPERTIES NO_SONAME 1)
+endif()
 
 if(MSVC)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Od")
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  if(CMAKE_BUILD_TYPE MATCHES "Debug")
     if(MSVC_VERSION LESS 1911)
-      target_link_options(${PROJECT_NAME} PUBLIC "/DEBUG:FULL")
+      target_link_options("${PROJECT_NAME}" PUBLIC "/DEBUG:FULL")
+      target_link_options("${PROJECT_NAME}_static" PUBLIC "/DEBUG:FULL")
     else()
-      target_link_options(${PROJECT_NAME} PUBLIC "/DEBUG:FASTLINK")
+      target_link_options("${PROJECT_NAME}" PUBLIC "/DEBUG:FASTLINK")
+      target_link_options("${PROJECT_NAME}_static" PUBLIC "/DEBUG:FASTLINK")
     endif()
   endif()
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
@@ -145,17 +169,23 @@ else()
 endif()
 
 # make the copy headers target a dependency to force it to run
-add_dependencies(${PROJECT_NAME} ${HDR_TARGET})
+add_dependencies("${PROJECT_NAME}" ${HDR_TARGET})
+add_dependencies("${PROJECT_NAME}_static" ${HDR_TARGET})
 
 # copy dependency output
 function(copy_dep_output DEP_TARGET)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD 
+  add_custom_command(TARGET "${PROJECT_NAME}" POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy
+      "$<TARGET_FILE:${DEP_TARGET}>"
+      "${DIST_DIR}/lib/$<IF:$<BOOL:${MSVC}>,$<CONFIG>/,>$<TARGET_FILE_NAME:${DEP_TARGET}>"
+    COMMENT "Copying '${DEP_TARGET}' dist output to output directory")
+  add_custom_command(TARGET "${PROJECT_NAME}_static" POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy
       "$<TARGET_FILE:${DEP_TARGET}>"
       "${DIST_DIR}/lib/$<IF:$<BOOL:${MSVC}>,$<CONFIG>/,>$<TARGET_FILE_NAME:${DEP_TARGET}>"
     COMMENT "Copying '${DEP_TARGET}' dist output to output directory")
   if(WIN32)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    add_custom_command(TARGET "${PROJECT_NAME}" POST_BUILD
       COMMAND "${CMAKE_COMMAND}" -E copy
         "$<TARGET_LINKER_FILE:${DEP_TARGET}>"
         "${DIST_DIR}/lib/$<IF:$<BOOL:${MSVC}>,$<CONFIG>/,>$<TARGET_LINKER_FILE_NAME:${DEP_TARGET}>"
