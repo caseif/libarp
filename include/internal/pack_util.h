@@ -10,6 +10,7 @@
 #pragma once
 
 #include "libarp/pack.h"
+#include "internal/package_defines.h"
 
 #include <stddef.h>
 
@@ -17,7 +18,7 @@
 #define FS_NODE_TYPE_FILE 'f'
 #define FS_NODE_TYPE_LINK 'l'
 
-typedef struct ArpPackingOptions {
+typedef struct ArpPackingOptionsStruct {
     char *pack_name;
     char *pack_namespace;
     size_t max_part_len;

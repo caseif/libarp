@@ -177,7 +177,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
     const void *data_window = in_data;
 
     size_t output_buf_len = in_data_len * 2;
-    void *output_buf;
+    void *output_buf = NULL;
     if ((output_buf = malloc(output_buf_len)) == NULL) {
         libarp_set_error("malloc failed");
         return ENOMEM;

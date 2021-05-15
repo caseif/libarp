@@ -153,6 +153,8 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     }
 
     if (bt_create(line_count, &csv->tree) == NULL) {
+        free(tree_data);
+
         return NULL;
     }
 

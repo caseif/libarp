@@ -7,6 +7,9 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
+
 #include "libarp/common.h"
 #include "libarp/defines.h"
 #include "libarp/pack.h"
@@ -74,10 +77,12 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     memcpy(opts->pack_name, pack_name, name_len_s + 1);
     memcpy(opts->pack_namespace, pack_namespace, namespace_len_s + 1);
     if (compression_type != NULL && strlen(compression_type) > 0) {
-        char *compress_magic;
+        char *compress_magic = NULL;
         if (strcmp(compression_type, ARP_COMPRESS_TYPE_DEFLATE) == 0) {
             compress_magic = ARP_COMPRESS_MAGIC_DEFLATE;
         } else {
+            free(opts);
+
             libarp_set_error("Unrecognized compression type");
             return NULL;
         }
@@ -252,6 +257,8 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
         DIR *root = NULL;
         if ((root = opendir(root_path)) == NULL) {
+            _free_fs_node(node);
+
             libarp_set_error("Failed to open directory");
             return -1;
         }
@@ -275,6 +282,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
             stat_t child_stat;
             if (stat(child_full_path, &child_stat) != 0) {
+                free(child_full_path);
+                _free_fs_node(node);
+
                 libarp_set_error("Failed to stat directory child while constructing fs tree (pass 1)");
                 return errno;
             }
@@ -286,6 +296,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         }
 
         if (errno != 0) {
+            free(child_full_path);
+            _free_fs_node(node);
+
             libarp_set_error("Encountered error while constructing fs tree (pass 1)");
             return errno;
         }
@@ -312,6 +325,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
                 stat_t child_stat;
                 if (stat(child_full_path, &child_stat) != 0) {
+                    free(child_full_path);
+                    _free_fs_node(node);
+
                     libarp_set_error("Failed to stat directory child while constructing fs tree (pass 2)");
                     return errno;
                 }
@@ -338,6 +354,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
             }
 
             if (errno != 0) {
+                free(child_full_path);
+                _free_fs_node(node);
+
                 libarp_set_error("Encountered error while building fs tree (pass 2)");
                 return errno;
             }
@@ -732,7 +751,7 @@ static int _unlink_part_files(const char *target_dir, const char *pack_name, siz
 
 static void _populate_package_header(arp_packing_options_t *opts, package_important_sizes_t *sizes,
         unsigned char out_buf[PACKAGE_HEADER_LEN]) {
-    memset(out_buf, 0, sizeof(PACKAGE_HEADER_LEN));
+    memset(out_buf, 0, PACKAGE_HEADER_LEN);
 
     // magic number
     // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
@@ -741,7 +760,7 @@ static void _populate_package_header(arp_packing_options_t *opts, package_import
     uint16_t version = CURRENT_MAJOR_VERSION;
     copy_int_as_le(offset_ptr(out_buf, PACKAGE_VERSION_OFF), &version, PACKAGE_VERSION_LEN);
     // compression
-    if (opts->compression_type != NULL) {
+    if (strlen(opts->compression_type) > 0) {
         memcpy(offset_ptr(out_buf, PACKAGE_COMPRESSION_OFF), opts->compression_type, PACKAGE_COMPRESSION_LEN);
     }
     // namespace
@@ -906,7 +925,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                     crc = crc32c_cont(crc, dir_listing_buffer, sizeof(dir_listing_buffer));
                 } else {
                     crc = crc32c(dir_listing_buffer, sizeof(dir_listing_buffer));
-                    began_crc = true;
                 }
 
                 cur_body_off += write_bytes;
@@ -956,7 +974,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             size_t packed_data_len = 0;
             size_t raw_data_len = 0;
 
-            void *compress_handle;
+            void *compress_handle = NULL;
 
             if (strlen(opts->compression_type) > 0) {
                 if (strcmp(opts->compression_type, ARP_COMPRESS_MAGIC_DEFLATE) == 0) {
@@ -971,6 +989,8 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             size_t remaining = cur_node_size;
             while ((read_bytes = fread(read_buffer, 1, IO_BUFFER_LEN, cur_node_file)) > 0) {
                 if (read_bytes > remaining) {
+                    free(cur_part_path);
+
                     libarp_set_error("File size changed while reading");
                     return -1;
                 }
@@ -1075,7 +1095,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
     _populate_package_header(opts, sizes, pack_header);
 
     if (fseek(cur_part_file, 0, SEEK_SET) != 0) {
-        free(cur_part_path);
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
         libarp_set_error("Failed to seek to file start");
@@ -1084,7 +1103,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
     // write package header
     if (fwrite(pack_header, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
-        free(cur_part_path);
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
         libarp_set_error("Failed to write package header to disk");
@@ -1092,7 +1110,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
     }
 
     if (fseek(first_part_file, sizes->cat_off, SEEK_SET) != 0) {
-        free(cur_part_path);
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
         libarp_set_error("Failed to seek to catalogue offset");

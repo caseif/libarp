@@ -10,6 +10,7 @@
 #pragma once
 
 #include "libarp/common.h"
+#include "libarp/unpack.h"
 #include "internal/package_defines.h"
 
 #include <stddef.h>
@@ -17,10 +18,10 @@
 #include <stdio.h>
 
 // forward decl
-struct ArpPackage;
+struct ArpPackageStruct;
 
 typedef struct NodeDesc {
-    struct ArpPackage *package;
+    struct ArpPackageStruct *package;
 
     uint8_t type;
     uint16_t part_index;
@@ -40,7 +41,7 @@ typedef struct NodeDesc {
     binary_tree_t children_tree;
 } node_desc_t;
 
-typedef struct ArpPackage {
+typedef struct ArpPackageStruct {
     uint16_t major_version;
     char compression_type[PACKAGE_COMPRESSION_LEN + 1];
     char package_namespace[PACKAGE_NAMESPACE_LEN + 1];

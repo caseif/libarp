@@ -7,6 +7,9 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
+
 #include "libarp/defines.h"
 #include "libarp/unpack.h"
 #include "internal/bt.h"
@@ -35,7 +38,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_NONSTDC_NO_DEPRECATE
 #define _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_DEPRECATE  
+#define _CRT_SECURE_NO_DEPRECATE
 #include <intrin.h>
 #include <memoryapi.h>
 #include <windows.h>
@@ -206,7 +209,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
             free(real_path);
-            
+
             libarp_set_error("malloc failed");
             return -1;
         }
@@ -217,8 +220,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
-        free(real_path);
-            
+            free(real_path);
+
             libarp_set_error("malloc failed");
             return -1;
         }
@@ -234,7 +237,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if ((file_stem_new = realloc(file_stem, stem_len_b)) == NULL) {
             free(parent_dir);
             free(file_stem);
-        free(real_path);
+            free(real_path);
 
             libarp_set_error("realloc failed");
             return -1;
@@ -291,6 +294,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
 
         stat_t part_stat;
         if (stat(part_path, &part_stat) != 0) {
+            free(part_path);
+
             libarp_set_error("Failed to stat part file");
 
             rc = errno;
@@ -299,6 +304,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         }
 
         if (!S_ISREG(part_stat.st_mode)) {
+            free(part_path);
+
             libarp_set_error("Part file must be regular file or symlink to regular file");
 
             rc = EINVAL;
@@ -307,6 +314,8 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         }
 
         if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
+            free(part_path);
+
             libarp_set_error("Package part file is too small");
             
             rc = EINVAL;
@@ -791,7 +800,7 @@ static int _seek_to_node(FILE *part_file, const node_desc_t *node) {
     }
 
     int rc = 0xDEADBEEF;
-    if ((rc = fseek(part_file, part_body_start + node->data_off, SEEK_SET)) != 0) {
+    if ((rc = fseek(part_file, (long) (part_body_start + node->data_off), SEEK_SET)) != 0) {
         libarp_set_error("Failed to seek to node offset");
         return rc;
     }
@@ -863,7 +872,7 @@ static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
         }
     }
 
-    void *compress_data;
+    void *compress_data = NULL;
     if (CMPR_ANY(pack->compression_type)) {
         if (CMPR_DEFLATE(pack->compression_type)) {
             compress_data = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len);
@@ -941,8 +950,13 @@ static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
         }
     }
 
-    if (CMPR_DEFLATE(pack->compression_type)) {
-        decompress_deflate_end(compress_data);
+    if (CMPR_ANY(pack->compression_type)) {
+        if (CMPR_DEFLATE(pack->compression_type)) {
+            decompress_deflate_end(compress_data);
+        } else {
+             // should have already validated by now
+            assert(false);
+        }
     }
 
     if (real_crc != node->crc) {
@@ -1104,7 +1118,9 @@ void unload_resource(arp_resource_t *resource) {
 
 ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len) {
     if (chunk_len == 0 || chunk_len > INT_MAX) {
+        errno = EINVAL;
         libarp_set_error("Streaming chunk length must be between 1 and 2147483647 bytes");
+        return NULL;
     }
 
     const node_desc_t *node = (node_desc_t*) meta->extra;
@@ -1135,6 +1151,8 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
     res_base_off += node->data_off;
 
     if ((stream->file = _open_part_file_for_node(node)) == NULL) {
+        free(stream);
+
         return NULL;
     }
 
@@ -1208,6 +1226,8 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
         case 2:
             target_buf = real_stream->tert_buf;
             break;
+        default:
+            assert(false);
     }
 
     size_t unread_packed_bytes = node->packed_data_len - real_stream->packed_pos;
@@ -1390,32 +1410,36 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
     arp_package_t *pack = node->package;
 
     if (node->type == PACK_NODE_TYPE_DIRECTORY) {
-        size_t new_dir_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1;
-        size_t new_dir_len_b = new_dir_len_s + 1;
+        size_t new_dir_path_len_s = strlen(cur_dir) + 1 + node->name_len_s + 1;
+        size_t new_dir_path_len_b = new_dir_path_len_s + 1;
 
-        char *new_dir;
+        char *new_dir_path = NULL;
 
         if (node->index == 0) {
-            new_dir = strdup(cur_dir);
+            new_dir_path = strdup(cur_dir);
         } else {
-            if ((new_dir = malloc(new_dir_len_b)) == NULL) {
+            if ((new_dir_path = malloc(new_dir_path_len_b)) == NULL) {
                 libarp_set_error("malloc failed");
                 return ENOMEM;
             }
 
-            snprintf(new_dir, new_dir_len_b, "%s%c%s", cur_dir, FS_PATH_DELIMITER, node->name);
+            snprintf(new_dir_path, new_dir_path_len_b, "%s%c%s", cur_dir, FS_PATH_DELIMITER, node->name);
         }
         
         stat_t dir_stat;
-        if (stat(new_dir, &dir_stat) != 0) {
-            if (errno = ENOENT) {
-                if (mkdir(new_dir, 0755) != 0) {
+        if (stat(new_dir_path, &dir_stat) != 0) {
+            if (errno == ENOENT) {
+                if (mkdir(new_dir_path, 0755) != 0) {
+                    free(new_dir_path);
+
                     char err_msg[ERR_MSG_MAX_LEN];
                     snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to create directory (rc: %d)", errno);
                     libarp_set_error(err_msg);
                     return errno;
                 }
             } else {
+                free(new_dir_path);
+
                 char err_msg[ERR_MSG_MAX_LEN];
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat directory (rc: %d)", errno);
                 libarp_set_error(err_msg);
@@ -1426,13 +1450,15 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         node_desc_t **child_ptr = NULL;
         bt_reset_iterator(&node->children_tree);
         while ((child_ptr = (node_desc_t**) bt_iterate(&node->children_tree)) != NULL) {
-            rc = _unpack_node_to_fs(*child_ptr, new_dir, last_part_index, last_part);
+            rc = _unpack_node_to_fs(*child_ptr, new_dir_path, last_part_index, last_part);
             if (rc != 0) {
+                free(new_dir_path);
+
                 return rc;
             }
         }
 
-        free(new_dir);
+        free(new_dir_path);
 
         return 0;
     } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
@@ -1445,7 +1471,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
             fclose(*last_part);
         }
 
-        FILE *cur_part;
+        FILE *cur_part = NULL;
 
         if (last_part_index == NULL || node->part_index != *last_part_index) {
             if (last_part_index != NULL) {
@@ -1579,7 +1605,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
 
         int rc = 0xDEADBEEF;
 
-        node_desc_t **child_ptr;
+        node_desc_t **child_ptr = NULL;
         bt_reset_iterator(&node->children_tree);
         while ((child_ptr = (node_desc_t**) bt_iterate(&node->children_tree)) != NULL) {
             node_desc_t *child = *child_ptr;
@@ -1598,6 +1624,10 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
                     size_t new_rp_len_b = new_rp_len_s + 1;
 
                     if ((new_running_path = malloc(new_rp_len_b)) == NULL) {
+                        if (base_running_path != running_path) {
+                            free(base_running_path);
+                        }
+
                         libarp_set_error("malloc failed");
                         return ENOMEM;
                     }
@@ -1615,6 +1645,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
             }
 
             if (rc != 0) {
+                free(base_running_path);
                 return rc;
             }
         }

@@ -27,6 +27,7 @@
 
 #define BITS_PER_BYTE 8U
 #define BYTES_PER_U64 8U
+#define BIT_MASK_8 0xFF
 
 static bool lookup_table_initted = false;
 static uint32_t crc_lookup[CRC_LOOKUP_TABLE_SIZE];
@@ -78,7 +79,7 @@ static inline uint32_t _sw_crc32c(uint32_t initial, const void *data, size_t len
     uint32_t crc = initial;
 
     for (size_t i = 0; i < len; i++) {
-        crc = (crc >> BITS_PER_BYTE) ^ crc_lookup[(crc & 0xFF) ^ data_uc[i]];
+        crc = (crc >> BITS_PER_BYTE) ^ crc_lookup[(crc & BIT_MASK_8) ^ data_uc[i]];
     }
 
     return ~crc;
