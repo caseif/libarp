@@ -616,7 +616,7 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
         return ENOMEM;
     }
 
-    int rc = (int) 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     size_t dir_off = 0;
     size_t file_off = dir_count;
@@ -1360,7 +1360,7 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
     _emit_message(msg_callback, "Reading filesystem contents");
 
     fs_node_ptr fs_tree = NULL;
-    int rc = (int) 0xDEADBEEF;
+    int rc = UNINIT_U32;
     if ((rc = _create_fs_tree(src_path, media_types, &fs_tree)) != 0) {
         _free_fs_node(fs_tree);
         return rc;

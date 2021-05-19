@@ -5,6 +5,7 @@
         -cert-dcl37-c,\
         -cert-dcl51-cpp,\
         -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,\
+        -clang-diagnostic-empty-translation-unit,\
         -cppcoreguidelines-avoid-non-const-global-variables,\
         -google-readability-todo,\
         -hicpp-signed-bitwise,\

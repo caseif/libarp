@@ -17,6 +17,7 @@
 #include "internal/compression.h"
 #include "internal/crc32c.h"
 #include "internal/file_defines.h"
+#include "internal/other_defines.h"
 #include "internal/package_defines.h"
 #include "internal/stack.h"
 #include "internal/unpack_util.h"
@@ -50,6 +51,8 @@
 #define IO_BUFFER_LEN (128 * 1024) // 128 KB
 
 #define VAR_STR_BUF_LEN 256
+
+#define DEFLATE_BUF_MARGIN 1.05L
 
 static void _copy_int_to_field(void *dst, const void *src, const size_t dst_len, size_t src_off) {
     copy_int_as_le(dst, (void*) ((uintptr_t) src + src_off), dst_len);
@@ -260,7 +263,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
 
     free(real_path);
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     bool part_err = false;
     for (int i = 2; i <= pack->total_parts; i++) {
@@ -608,7 +611,7 @@ int load_package_from_file(const char *path, ArpPackage *package) {
         return -1;
     }
 
-    int rc = (int) 0xDEADBEEF;
+    int rc = UNINIT_U32;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         unload_package(pack);
         fclose(package_file);
@@ -686,7 +689,7 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, ArpP
         return ENOMEM;
     }
 
-    int rc = (int) 0xDEADBEEF;
+    int rc = UNINIT_U32;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         unload_package(pack);
         return rc;
@@ -799,7 +802,7 @@ static int _seek_to_node(FILE *part_file, const node_desc_t *node) {
         part_body_start = PACKAGE_PART_HEADER_LEN;
     }
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
     if ((rc = fseek(part_file, (long) (part_body_start + node->data_off), SEEK_SET)) != 0) {
         libarp_set_error("Failed to seek to node offset");
         return rc;
@@ -837,7 +840,7 @@ static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
         void **out_data, size_t *out_data_len, FILE *part) {
     assert((out_data != NULL) ^ (out_file != NULL)); // only one can be supplied
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     arp_package_t *pack = node->package;
 
@@ -921,7 +924,7 @@ static int _unpack_node_data(const node_desc_t *node, FILE *out_file,
 
         if (CMPR_ANY(pack->compression_type)) {
             if (CMPR_DEFLATE(pack->compression_type)) {
-                int rc = 0xDEADBEEF;
+                int rc = UNINIT_U32;
                 if ((rc = decompress_deflate(compress_data, read_buf, to_read,
                         &unpacked_chunk, &unpacked_chunk_len)) != 0) {
                     decompress_deflate_end(compress_data);
@@ -1274,7 +1277,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
         size_t max_to_read = required_from_disk;
         if (CMPR_ANY(node->package->compression_type)) {
             // include a small buffer space to allow efficient processing of uncompressible data
-            max_to_read *= 1.02f;
+            max_to_read *= DEFLATE_BUF_MARGIN;
         }
 
         size_t output_buf_off = 0;
@@ -1403,7 +1406,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
 int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part) {
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     assert((last_part == NULL) == (last_part_index == NULL));
 
@@ -1603,7 +1606,7 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
             snprintf(base_running_path, brp_len_s, "%s%c", pack_ns, ARP_NAMESPACE_DELIMITER);
         }
 
-        int rc = 0xDEADBEEF;
+        int rc = UNINIT_U32;
 
         node_desc_t **child_ptr = NULL;
         bt_reset_iterator(&node->children_tree);
@@ -1689,7 +1692,7 @@ int get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listi
         return ENOMEM;
     }
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     size_t cur_off = 0;
     if ((rc = _list_node_contents(real_pack->all_nodes[0], real_pack->package_namespace, NULL, listing_arr, &cur_off)) != 0) {

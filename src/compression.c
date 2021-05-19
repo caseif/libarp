@@ -9,6 +9,7 @@
 
 #include "internal/common_util.h"
 #include "internal/compression.h"
+#include "internal/other_defines.h"
 #include "internal/util.h"
 
 #include "zlib.h"
@@ -21,6 +22,8 @@
 #include <string.h>
 
 #define DEFLATE_CHUNK_LEN 262144 // 256K
+
+#define DEFLATE_BUF_MARGIN 1.1L
 
 typedef struct DeflateStream {
     size_t total_input_bytes;
@@ -60,7 +63,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
     deflate_stream_t *real_stream = (deflate_stream_t*) stream;
 
     // we don't really need precision here, we just need the result to be roughly a certain margin larger
-    size_t output_buf_len = (size_t) (data_len * 1.1L); // should be far more than enough
+    size_t output_buf_len = (size_t) (data_len * DEFLATE_BUF_MARGIN); // should be far more than enough
 
     void *output_buf = NULL;
     if ((output_buf = malloc(output_buf_len)) == NULL) {
@@ -72,7 +75,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
     size_t remaining = data_len;
     void *data_window = data;
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
     while (remaining > 0) {
         size_t to_read = MIN(remaining, sizeof(real_stream->in_buf));
         assert(real_stream->processed_bytes + to_read <= real_stream->total_input_bytes);
@@ -135,8 +138,6 @@ void compress_deflate_end(DeflateStream stream) {
 
     deflateEnd(&real_stream->zlib_stream);
     free(real_stream);
-
-    return;
 }
 
 DeflateStream decompress_deflate_begin(const size_t total_input_bytes, const size_t total_output_bytes) {
@@ -156,10 +157,11 @@ DeflateStream decompress_deflate_begin(const size_t total_input_bytes, const siz
     stream->zlib_stream.avail_in = 0;
     stream->zlib_stream.next_in = Z_NULL;
 
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
     if ((rc = inflateInit(&stream->zlib_stream)) != Z_OK) {
         free(stream);
 
+        errno = rc;
         libarp_set_error("zlib: inflateInit failed");
         return NULL;
     }
@@ -168,7 +170,7 @@ DeflateStream decompress_deflate_begin(const size_t total_input_bytes, const siz
 }
 
 int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, void **out_data, size_t *out_data_len) {
-    int rc = 0xDEADBEEF;
+    int rc = UNINIT_U32;
 
     deflate_stream_t *real_stream = (deflate_stream_t*) stream;
 

@@ -18,3 +18,5 @@
 #else
 #define PATH_SEPARATOR "/"
 #endif
+
+#define UNINIT_U32 ((int) 0xDEADBEEF)
