@@ -7,6 +7,13 @@ project(libarp VERSION 1.0.0)
 
 set(LIBRARY_BASE_NAME arp)
 
+if(WIN32)
+  set(CMAKE_SHARED_LIBRARY_PREFIX "")
+  set(CMAKE_SHARED_MODULE_PREFIX "")
+  set(CMAKE_IMPORT_LIBRARY_PREFIX "")
+  set(CMAKE_STATIC_LIBRARY_PREFIX "")
+endif()
+
 option(LIBARP_FEATURE_PACK "Compile with support for packing data" ON)
 option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
 option(LIBARP_FEATURE_DEFLATE "Compile with support for DEFLATE compression" ON)

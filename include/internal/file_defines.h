@@ -13,7 +13,8 @@
 #include <sys/types.h>
 
 #ifdef _WIN32
-    #include <Windows.h>
+    #include <stdio.h>
+    #include <windows.h>
 
     #define fileno _fileno
     #define fseek _fseeki64
@@ -21,8 +22,14 @@
     #define stat _stat64
     #define stat_t struct _stat64
 
+    #define mkdir(p, m) mkdir(p)
+
+    #ifndef S_ISDIR
     #define S_ISDIR(mode) (mode & S_IFDIR)
+    #endif
+    #ifndef S_ISREG
     #define S_ISREG(mode) (mode & S_IFREG)
+    #endif
 
     #define TEMP_PATH "C:\\Temp"
 

@@ -214,14 +214,14 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         bool is_root) {
     WIN32_FIND_DATAA find_data;
 
-    HANDLE find_handle = FindFirstFileW(root_path, &find_data);
+    HANDLE find_handle = FindFirstFileA(root_path, &find_data);
     if (find_handle == INVALID_HANDLE_VALUE) {
-        return NULL;
+        return -1;
     }
 
     do {
         //TODO
-    } while (FindNextFileW(find_handle, &find_data) != 0);
+    } while (FindNextFileA(find_handle, &find_data) != 0);
 }
 #else
 static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res,

@@ -14,6 +14,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#include <intrin.h>
+#endif
+
 #include <immintrin.h>
 
 #define CRC_POLY_REV 0x82F63B78
