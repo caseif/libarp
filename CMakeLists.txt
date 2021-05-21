@@ -12,6 +12,9 @@ if(WIN32)
   set(CMAKE_SHARED_MODULE_PREFIX "")
   set(CMAKE_IMPORT_LIBRARY_PREFIX "")
   set(CMAKE_STATIC_LIBRARY_PREFIX "")
+
+  set(CMAKE_IMPORT_LIBRARY_SUFFIX ".dll.lib")
+  set(CMAKE_STATIC_LIBRARY_SUFFIX ".lib")
 endif()
 
 option(LIBARP_FEATURE_PACK "Compile with support for packing data" ON)
@@ -171,7 +174,12 @@ else()
   if(IS_TARGET_X86)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
   endif()
-  set(CMAKE_C_FLAGS_DEBUG "-g")
+  if(MINGW)
+    set(CMAKE_C_FLAGS_DEBUG "-gdwarf-2")
+  else()
+    set(CMAKE_C_FLAGS_DEBUG "-g")
+  endif()
+
   set(CMAKE_C_FLAGS_RELEASE "-O3")
 endif()
 
