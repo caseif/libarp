@@ -427,6 +427,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
     for (size_t i = 0; i < pack->node_count; i++) {
         if (pack->cat_len - node_start < ND_LEN_LEN) {
             libarp_set_error("Catalogue underflow");
+
             return -1;
         }
         
@@ -448,7 +449,7 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
             libarp_set_error("Catalogue underflow");
             return -1;
         }
-        
+
         node_desc_t *node = NULL;
         if ((node = malloc(sizeof(node_desc_t))) == NULL) {
             libarp_set_error("malloc failed");
@@ -643,9 +644,27 @@ int load_package_from_file(const char *path, ArpPackage *package) {
 
     void *pack_data_view = NULL;
     #ifdef _WIN32
-    HANDLE file_mapping = CreateFileMappingW(package_file, NULL, PAGE_READONLY,
+    HANDLE win32_pack_file = (HANDLE) _get_osfhandle(_fileno(package_file));
+
+    HANDLE file_mapping = CreateFileMapping(win32_pack_file, NULL, PAGE_READONLY,
             package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
-    pack_data_view = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size);
+
+    if (file_mapping == NULL) {
+        unload_package(pack);
+        fclose(package_file);
+
+        libarp_set_error("Failed to memory-map package file\n");
+        return GetLastError();
+    }
+
+    if ((pack_data_view = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size)) == NULL) {
+        CloseHandle(file_mapping);
+        unload_package(pack);
+        fclose(package_file);
+
+        libarp_set_error("Failed to map view of package file\n");
+        return GetLastError();
+    }
     #else
     pack_data_view = mmap(NULL, package_file_size, PROT_READ, MAP_PRIVATE, fileno(package_file), 0);
     #endif

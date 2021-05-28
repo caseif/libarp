@@ -7,11 +7,11 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include <stdio.h>
-#include <string.h>
-
 #include "libarp/common.h"
 #include "internal/util.h"
+
+#include <stdio.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -25,7 +25,7 @@ const char *libarp_get_error(void) {
     return err_msg;
 }
 
-void libarp_set_error(const char *msg) {
+void libarp_real_set_error(const char *msg, const char *file, int line) {
     size_t msg_len = strlen(msg);
 
     if (msg_len > sizeof(err_msg) - 1) {
@@ -34,13 +34,17 @@ void libarp_set_error(const char *msg) {
 
     memcpy(err_msg, msg, msg_len + 1);
 
-    fprintf(stderr, "[libarp] %s\n", err_msg);
+    #ifdef LIBARP_DEBUG
+    fprintf(stderr, "%s:%d: [libarp] %s\n", file, line, err_msg);
+    #endif
 
-    #ifndef NDEBUG
+    #ifdef LIBARP_DEBUG
     #ifdef _WIN32
     __debugbreak();
     #else
     raise(SIGTRAP);
     #endif
+    #else
+    fprintf(stderr, "[libarp] %s\n", err_msg);
     #endif
 }

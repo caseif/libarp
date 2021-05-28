@@ -9,10 +9,12 @@
 
 #pragma once
 
-#ifdef LIBARP_DEBUG
-#define libarp_set_error(msg) libarp_real_set_error(msg, __FILE__, __LINE__)
-#else
-#define libarp_set_error(msg) libarp_real_set_error(msg, "", 0)
-#endif
+typedef void *DirHandle;
 
-void libarp_real_set_error(const char *msg, const char *file, int line);
+DirHandle open_directory(const char *path);
+
+const char *read_directory(DirHandle dir);
+
+void rewind_directory(DirHandle dir);
+
+void close_directory(DirHandle dir);

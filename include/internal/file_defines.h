@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#define WIN32_PATH_DELIMITER '\\'
+#define UNIX_PATH_DELIMITER '/'
+
 #ifdef _WIN32
     #include <stdio.h>
     #include <windows.h>
@@ -33,11 +36,13 @@
 
     #define TEMP_PATH "C:\\Temp"
 
-    #define FS_PATH_DELIMITER '\\'
-#else
-    #include <dirent.h>
+    #define FS_PATH_DELIMITER WIN32_PATH_DELIMITER
 
-    #define FS_PATH_DELIMITER '/'
+    #define IS_PATH_DELIMITER(c) ((c) == WIN32_PATH_DELIMITER || (c) == UNIX_PATH_DELIMITER)
+#else
+    #define FS_PATH_DELIMITER UNIX_PATH_DELIMITER
+
+    #define IS_PATH_DELIMITER(c) ((c) == UNIX_PATH_DELIMITER)
 
     #define stat_t struct stat
 #if defined __APPLE__

@@ -18,6 +18,7 @@
 #include "internal/crc32c.h"
 #include "internal/csv.h"
 #include "internal/file_defines.h"
+#include "internal/fs.h"
 #include "internal/other_defines.h"
 #include "internal/package_defines.h"
 #include "internal/pack_util.h"
@@ -33,7 +34,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <shlwapi.h>
+#else
 #include <libgen.h>
 #endif
 
@@ -207,23 +210,6 @@ static void _free_fs_node(fs_node_ptr node) {
     free(node);
 }
 
-// annoyingly, the FS APIs are so different between Win32 and POSIX that we need
-// totally separate implementations
-#ifdef _WIN32
-static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res,
-        bool is_root) {
-    WIN32_FIND_DATAA find_data;
-
-    HANDLE find_handle = FindFirstFileA(root_path, &find_data);
-    if (find_handle == INVALID_HANDLE_VALUE) {
-        return -1;
-    }
-
-    do {
-        //TODO
-    } while (FindNextFileA(find_handle, &find_data) != 0);
-}
-#else
 static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res,
         bool is_root) {
     static uint8_t recursion_count = 0;
@@ -255,39 +241,45 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         node->type = FS_NODE_TYPE_DIR;
         // calloc sets the name and ext to null - the caller will set these if necessary
 
-        DIR *root = NULL;
-        if ((root = opendir(root_path)) == NULL) {
+        DirHandle root = NULL;
+        if ((root = open_directory(root_path)) == NULL) {
             _free_fs_node(node);
 
-            libarp_set_error("Failed to open directory");
-            return -1;
+            return errno;
         }
 
-        char *child_full_path = NULL;
-        if ((child_full_path = malloc(strlen(root_path) + 1 + NAME_MAX + 1)) == NULL) {
-            _free_fs_node(node);
-
-            libarp_set_error("malloc failed");
-            return ENOMEM;
-        }
-
-        struct dirent *de = NULL;
+        const char *child_name = NULL;
         errno = 0;
-        while ((de = readdir(root)) != NULL) {
-            sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
+        while ((child_name = read_directory(root)) != NULL) {
+            char *child_full_path = NULL;
+            if ((child_full_path = malloc(strlen(root_path) + 1 + strlen(child_name) + 1)) == NULL) {
+                close_directory(root);
 
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
+                _free_fs_node(node);
+
+                libarp_set_error("malloc failed");
+                return ENOMEM;
+            }
+
+            sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, child_name);
+
+            if (strcmp(child_name, ".") == 0 || strcmp(child_name, "..") == 0) {
+                free(child_full_path);
                 continue;
             }
 
             stat_t child_stat;
             if (stat(child_full_path, &child_stat) != 0) {
+                close_directory(root);
+
                 free(child_full_path);
                 _free_fs_node(node);
 
                 libarp_set_error("Failed to stat directory child while constructing fs tree (pass 1)");
                 return errno;
             }
+
+            free(child_full_path);
 
             // we don't check for links here because they should be transparently resolved
             if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)) {
@@ -296,18 +288,18 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         }
 
         if (errno != 0) {
-            free(child_full_path);
+            close_directory(root);
+
             _free_fs_node(node);
 
             libarp_set_error("Encountered error while constructing fs tree (pass 1)");
             return errno;
         }
 
-        rewinddir(root);
+        rewind_directory(root);
 
         if (node->children_count > 0) {
             if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
-                free(child_full_path);
                 _free_fs_node(node);
 
                 libarp_set_error("malloc failed");
@@ -316,15 +308,27 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
             size_t child_index = 0;
             errno = 0;
-            while ((de = readdir(root)) != NULL && child_index < node->children_count) {
-                if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
+            while ((child_name = read_directory(root)) != NULL && child_index < node->children_count) {
+                if (strcmp(child_name, ".") == 0 || strcmp(child_name, "..") == 0) {
                     continue;
                 }
 
-                sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, de->d_name);
+                char *child_full_path = NULL;
+                if ((child_full_path = malloc(strlen(root_path) + 1 + strlen(child_name) + 1)) == NULL) {
+                    close_directory(root);
+
+                    _free_fs_node(node);
+
+                    libarp_set_error("malloc failed");
+                    return ENOMEM;
+                }
+
+                sprintf(child_full_path, "%s" PATH_SEPARATOR "%s", root_path, child_name);
 
                 stat_t child_stat;
                 if (stat(child_full_path, &child_stat) != 0) {
+                    close_directory(root);
+
                     free(child_full_path);
                     _free_fs_node(node);
 
@@ -333,11 +337,14 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                 }
 
                 fs_node_ptr child_node = NULL;
+
                 recursion_count++;
                 {
                     int rc = _create_fs_tree_impl(child_full_path, media_types, &child_node, false);
+                    free(child_full_path);
                     if (rc != 0) {
-                        free(child_full_path);
+                        close_directory(root);
+
                         _free_fs_node(node);
 
                         *res = NULL;
@@ -353,8 +360,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                 errno = 0;
             }
 
+            close_directory(root);
+
             if (errno != 0) {
-                free(child_full_path);
                 _free_fs_node(node);
 
                 libarp_set_error("Encountered error while building fs tree (pass 2)");
@@ -366,10 +374,6 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         } else {
             node->children = NULL;
         }
-
-        free(child_full_path);
-
-        closedir(root);
     } else if (S_ISREG(root_stat.st_mode)) {
         // symlinks should be transparently resolved
         node->type = FS_NODE_TYPE_FILE;
@@ -390,9 +394,9 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
     #ifdef _WIN32
     char win32_path_buffer[MAX_PATH + 1];
-    size_t win32_path_len = GetFullPathNameW(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
+    size_t win32_path_len = GetFullPathName(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
 
-    if (win32_path_len == 0 || win32_path_len > MAX_PATH + 1) {
+    if (win32_path_len == 0 || win32_path_len > MAX_PATH) {
         _free_fs_node(node);
 
         libarp_set_error("Failed to get full file path");
@@ -407,6 +411,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     }
 
     memcpy(node->target_path, win32_path_buffer, win32_path_len);
+    node->target_path[win32_path_len] = '\0';
     #else
     // realpath returns a malloc'd string, so assigning it directly is fine
     if ((node->target_path = realpath(root_path, NULL)) == NULL) {
@@ -431,7 +436,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     char *file_name = NULL;
     #ifdef _WIN32
     file_name = path_copy;
-    PathStripPathW(file_name);
+    PathStripPath(file_name);
     #else
     if ((file_name = basename(path_copy)) == NULL) {
         free(path_copy);
@@ -526,7 +531,6 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     *res = node;
     return 0;
 }
-#endif
 
 static int _create_fs_tree(const char *root_path, const csv_file_t *media_types, fs_node_ptr *res) {
     return _create_fs_tree_impl(root_path, media_types, res, true);
@@ -638,6 +642,8 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
     if (sizes->part_count == 0) {
         sizes->part_count = 1;
     }
+
+    assert(fs_root != NULL);
 
     size_t stem_len_s = fs_root->is_root ? 0 : strlen(fs_root->file_stem);
 
@@ -1347,11 +1353,30 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
         void (*msg_callback)(const char*)) {
     arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
 
-    if (!validate_src_path(src_path)) {
+    char *real_src_path = NULL;
+    if ((real_src_path = malloc(strlen(src_path) + 1)) == NULL) {
+        libarp_set_error("malloc failed");
+        return ENOMEM;
+    }
+
+    memcpy(real_src_path, src_path, strlen(src_path) + 1);
+    for (size_t i = strlen(real_src_path) - 1; i > 0; i--) {
+        if (IS_PATH_DELIMITER(real_src_path[i])) {
+            real_src_path[i] = '\0';
+        } else {
+            break;
+        }
+    }
+
+    if (!validate_src_path(real_src_path)) {
+        free(real_src_path);
+
         return -1;
     }
 
     if (!validate_output_path(output_dir)) {
+        free(real_src_path);
+
         return -1;
     }
 
@@ -1360,8 +1385,9 @@ int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingO
     _emit_message(msg_callback, "Reading filesystem contents");
 
     fs_node_ptr fs_tree = NULL;
-    int rc = UNINIT_U32;
-    if ((rc = _create_fs_tree(src_path, media_types, &fs_tree)) != 0) {
+    int rc = _create_fs_tree(real_src_path, media_types, &fs_tree);
+    free(real_src_path);
+    if (rc != 0) {
         _free_fs_node(fs_tree);
         return rc;
     }

@@ -66,6 +66,11 @@ add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
 list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
 
+if(MINGW)
+  list(APPEND EXT_LIBS "shlwapi")
+  list(APPEND EXT_LIBS_STATIC "shlwapi")
+endif()
+
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 set(INC_DIR "${PROJECT_SOURCE_DIR}/include")
 set(TOOLING_DIR "${PROJECT_SOURCE_DIR}/tooling")
@@ -151,8 +156,11 @@ set_target_properties("${PROJECT_NAME}" PROPERTIES SOVERSION ${PROJECT_VERSION_M
 set_target_properties("${PROJECT_NAME}" PROPERTIES DEBUG_POSTFIX "d")
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES DEBUG_POSTFIX "d")
 
+target_compile_definitions("${PROJECT_NAME}" PUBLIC "$<$<CONFIG:DEBUG>:LIBARP_DEBUG>")
+target_compile_definitions("${PROJECT_NAME}_static" PUBLIC "$<$<CONFIG:DEBUG>:LIBARP_DEBUG>")
+
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
-  set_target_properties(${PROJECT_NAME} PROPERTIES NO_SONAME 1)
+  set_target_properties("${PROJECT_NAME}" PROPERTIES NO_SONAME 1)
 endif()
 
 if(MSVC)
@@ -175,7 +183,7 @@ else()
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
   endif()
   if(MINGW)
-    set(CMAKE_C_FLAGS_DEBUG "-gdwarf-2")
+    set(CMAKE_C_FLAGS_DEBUG "-ggdb")
   else()
     set(CMAKE_C_FLAGS_DEBUG "-g")
   endif()
