@@ -66,7 +66,7 @@ add_definitions("-DFEATURE_DEFLATE")
 list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
 list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
 
-if(MINGW)
+if(WIN32)
   list(APPEND EXT_LIBS "shlwapi")
   list(APPEND EXT_LIBS_STATIC "shlwapi")
 endif()
