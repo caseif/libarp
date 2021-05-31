@@ -26,10 +26,6 @@ if("${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
   message(SEND_ERROR "In-source builds are not allowed.")
 endif()
 
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(SEND_ERROR "32-bit builds are not supported")
-endif()
-
 set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE 1)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -177,18 +173,18 @@ if(MSVC)
   endif()
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
-  set(CMAKE_C_FLAGS "-Wall -Wextra -Winit-self -Wuninitialized \
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Winit-self -Wuninitialized \
                      -Wmissing-declarations -Winit-self -pedantic -pedantic-errors -std=c11")
   if(IS_TARGET_X86)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
   endif()
   if(MINGW)
-    set(CMAKE_C_FLAGS_DEBUG "-ggdb")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -ggdb")
   else()
-    set(CMAKE_C_FLAGS_DEBUG "-g")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
   endif()
 
-  set(CMAKE_C_FLAGS_RELEASE "-O3")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 endif()
 
 # make the copy headers target a dependency to force it to run

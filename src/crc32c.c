@@ -23,7 +23,9 @@
 #define CRC_POLY_REV 0x82F63B78
 
 #if defined(__x86_64__) || defined(_M_X64)
-#define ARCH_X64
+#define ARCH_X86_64
+#elif defined(__x86__) || defined(M_X86)
+#define ARCH_X86
 #endif
 
 #define CRC_LOOKUP_TABLE_SIZE 256U
@@ -31,6 +33,7 @@
 
 #define BITS_PER_BYTE 8U
 #define BYTES_PER_U64 8U
+#define BYTES_PER_U32 4U
 #define BIT_MASK_8 0xFF
 
 static bool lookup_table_initted = false;
@@ -46,7 +49,7 @@ static void _compute_crc_lookup_table(void) {
     }
 }
 
-#ifdef ARCH_X64
+#if defined(ARCH_X86_64) || defined(ARCH_X86)
 static inline bool _is_sse42_supported(void) {
     #ifdef _WIN32
     int cpu_info[4];
@@ -57,20 +60,28 @@ static inline bool _is_sse42_supported(void) {
     return __builtin_cpu_supports("sse4.2");
     #endif
 }
-#endif
 
 static inline uint32_t _x86_crc32c(uint32_t initial, const void *data, size_t len) {
+    #ifdef ARCH_X86_64
     size_t data_block_len = BYTES_PER_U64;
+    #else
+    size_t data_block_len = BYTES_PER_U32;
+    #endif
 
     uint32_t crc = initial;
     for (size_t i = 0; i < len - (len % data_block_len); i += data_block_len) {
+        #ifdef ARCH_X86_64
         crc = _mm_crc32_u64(crc, *((uint64_t*) ((uintptr_t) data + i)));
+        #else
+        crc = _mm_crc32_u32(crc, *((uint32_t*) ((uintptr_t) data + i)));
+        #endif
     }
     for (size_t i = len - (len % data_block_len); i < len; i++) {
         crc = _mm_crc32_u8(crc, *((uint8_t*) ((uintptr_t) data + i)));
     }
     return ~crc;
 }
+#endif
 
 static inline uint32_t _sw_crc32c(uint32_t initial, const void *data, size_t len) {
     if (!lookup_table_initted) {
@@ -92,7 +103,7 @@ static inline uint32_t _sw_crc32c(uint32_t initial, const void *data, size_t len
 uint32_t crc32c_cont(uint32_t initial, const void *data, size_t len) {
     uint32_t real_initial = ~initial;
 
-    #ifdef ARCH_X64
+    #if defined(ARCH_X86_64) || defined(ARCH_X86)
     if (_is_sse42_supported()) {
         return _x86_crc32c(real_initial, data, len);
     }

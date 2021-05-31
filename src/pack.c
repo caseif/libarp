@@ -1245,6 +1245,7 @@ static void _emit_message(void (*callback)(const char*), const char *msg) {
 static bool validate_src_path(const char *src_path) {
     stat_t src_stat;
     if (stat(src_path, &src_stat) != 0) {
+        printf("src_path: %s\n", src_path);
         switch (errno) {
             case EACCES: {
                 libarp_set_error("Cannot access source path");
