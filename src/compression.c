@@ -26,15 +26,15 @@
 #define DEFLATE_BUF_MARGIN 1.1L
 
 typedef struct DeflateStream {
-    size_t total_input_bytes;
-    size_t total_output_bytes;
-    size_t processed_bytes;
+    uint64_t total_input_bytes;
+    uint64_t total_output_bytes;
+    uint64_t processed_bytes;
     z_stream zlib_stream;
     unsigned char in_buf[DEFLATE_CHUNK_LEN];
     unsigned char out_buf[DEFLATE_CHUNK_LEN];
 } deflate_stream_t;
 
-DeflateStream compress_deflate_begin(const size_t total_input_bytes) {
+DeflateStream compress_deflate_begin(const uint64_t total_input_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -64,6 +64,10 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
 
     // we don't really need precision here, we just need the result to be roughly a certain margin larger
     size_t output_buf_len = (size_t) (data_len * DEFLATE_BUF_MARGIN); // should be far more than enough
+    // just in case it overflows
+    if (output_buf_len < data_len) {
+        output_buf_len = data_len;
+    }
 
     void *output_buf = NULL;
     if ((output_buf = malloc(output_buf_len)) == NULL) {
@@ -140,7 +144,7 @@ void compress_deflate_end(DeflateStream stream) {
     free(real_stream);
 }
 
-DeflateStream decompress_deflate_begin(const size_t total_input_bytes, const size_t total_output_bytes) {
+DeflateStream decompress_deflate_begin(const uint64_t total_input_bytes, const uint64_t total_output_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
         libarp_set_error("malloc failed");

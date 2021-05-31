@@ -36,7 +36,7 @@ typedef struct NodeDesc {
     char *ext;
     char *media_type;
 
-    size_t index;
+    uint64_t index;
     arp_resource_t *loaded_data;
     binary_tree_t children_tree;
 } node_desc_t;
@@ -73,9 +73,9 @@ typedef struct ArpResourceStream {
 
     // state
     FILE *file;
-    size_t base_off;
-    size_t packed_pos; // total number of packed bytes read
-    size_t unpacked_pos; // total number of unpacked bytes read, including data written to overflow_buf
+    uint64_t base_off;
+    uint64_t packed_pos; // total number of packed bytes read
+    uint64_t unpacked_pos; // total number of unpacked bytes read, including data written to overflow_buf
     unsigned char next_buf; // the next buffer to load data into
     void *compression_data;
 } arp_resource_stream_t;

@@ -21,7 +21,7 @@
 typedef struct ArpPackingOptionsStruct {
     char *pack_name;
     char *pack_namespace;
-    size_t max_part_len;
+    uint64_t max_part_len;
     char compression_type[PACKAGE_COMPRESSION_LEN + 1];
     char *media_types_path;
 } arp_packing_options_t;
@@ -32,7 +32,7 @@ typedef struct FsNode {
     char *file_stem;
     char *file_ext;
     char *media_type;
-    size_t size;
+    uint64_t size;
     struct FsNode **children;
     size_t children_count;
     bool is_root;

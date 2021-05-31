@@ -11,11 +11,13 @@
 
 #include "libarp/common.h"
 
+#include <stdint.h>
+
 #define DEFAULT_MEDIA_TYPE "application/octet-stream"
 
 typedef void* ArpPackingOptions;
 
-ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, size_t max_part_len,
+ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, uint64_t max_part_len,
         const char *compression_type, const char *media_types_path);
 
 void free_packing_options(ArpPackingOptions opts);

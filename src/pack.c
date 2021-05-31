@@ -45,7 +45,7 @@
 #define IO_BUFFER_LEN (128 * 1024) // 128 KB
 #define DIR_LIST_BUFFER_LEN 1024 // 4 KB
 
-ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, size_t max_part_len,
+ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, uint64_t max_part_len,
         const char *compression_type, const char *media_types_path) {
     size_t name_len_s = strlen(pack_name);
     size_t namespace_len_s = strlen(pack_namespace);
@@ -283,13 +283,20 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
             // we don't check for links here because they should be transparently resolved
             if (S_ISDIR(child_stat.st_mode) || S_ISREG(child_stat.st_mode)) {
+                if (node->children_count == SIZE_MAX) {
+                    close_directory(root);
+                    _free_fs_node(node);
+
+                    libarp_set_error("Too many directory children to count");
+                    return E2BIG;
+                }
+
                 node->children_count++;
             }
         }
 
         if (errno != 0) {
             close_directory(root);
-
             _free_fs_node(node);
 
             libarp_set_error("Encountered error while constructing fs tree (pass 1)");
@@ -313,10 +320,17 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                     continue;
                 }
 
+                if (child_index == SIZE_MAX) {
+                    close_directory(root);
+                    _free_fs_node(node);
+
+                    libarp_set_error("Too many directory children to count");
+                    return E2BIG;
+                }
+
                 char *child_full_path = NULL;
                 if ((child_full_path = malloc(strlen(root_path) + 1 + strlen(child_name) + 1)) == NULL) {
                     close_directory(root);
-
                     _free_fs_node(node);
 
                     libarp_set_error("malloc failed");
@@ -351,9 +365,11 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                         return rc;
                     }
                 }
+
                 recursion_count--;
 
                 node->children[child_index] = child_node;
+
 
                 child_index++;
 
@@ -548,6 +564,11 @@ static size_t _fs_node_count(fs_node_ptr root, bool dirs_only) {
         size_t count = 1;
 
         for (size_t i = 0; i < root->children_count; i++) {
+            if (count == SIZE_MAX) {
+                libarp_set_error("Too many fs nodes to count");
+                return count;
+            }
+
             count += _fs_node_count(root->children[i], dirs_only);
         }
 
@@ -636,9 +657,9 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
 }
 
 // forward declaration required for recursive calls
-static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes);
+static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part_len, package_important_sizes_t *sizes);
 
-static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_len, package_important_sizes_t *sizes) {
+static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part_len, package_important_sizes_t *sizes) {
     if (sizes->part_count == 0) {
         sizes->part_count = 1;
     }
@@ -648,6 +669,14 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
     size_t stem_len_s = fs_root->is_root ? 0 : strlen(fs_root->file_stem);
 
     if (fs_root->type == FS_NODE_TYPE_FILE || fs_root->type == FS_NODE_TYPE_LINK) {
+        if (sizes->node_count == UINT32_MAX) {
+            libarp_set_error("Too many nodes to pack");
+            return E2BIG;
+        } else if (sizes->resource_count == UINT32_MAX) {
+            libarp_set_error("Too many resources to pack");
+            return E2BIG;
+        }
+        
         size_t ext_len_s = 0;
         if (fs_root->file_ext != NULL) {
             ext_len_s = strlen(fs_root->file_ext);
@@ -681,6 +710,14 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, size_t max_part_l
         sizes->node_count += 1;
         sizes->resource_count += 1;
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
+        if (sizes->node_count == UINT32_MAX) {
+            libarp_set_error("Too many nodes to pack");
+            return E2BIG;
+        } else if (sizes->directory_count == UINT32_MAX) {
+            libarp_set_error("Too many directories to pack");
+            return E2BIG;
+        }
+
         sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s;
 
         size_t node_len = fs_root->children_count * NODE_DESC_INDEX_LEN;
@@ -822,15 +859,15 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
     memset(sizes->body_lens, 0, sizeof(sizes->body_lens));
 
-    size_t cur_body_off = sizes->first_body_off;
+    uint64_t cur_body_off = sizes->first_body_off;
 
     // write node contents
-    for (size_t i = 0; i < sizes->node_count; i++) {
+    for (uint32_t i = 0; i < sizes->node_count; i++) {
         // disable lint to remove a very stubborn false positive
         // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
         fs_node_ptr node = fs_flat[i];
 
-        size_t new_part_len = cur_body_off + node->size;
+        uint64_t new_part_len = cur_body_off + node->size;
         if (opts->max_part_len != 0 && new_part_len > opts->max_part_len) {
             fclose(cur_part_file);
 
@@ -951,7 +988,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 return -1;
             }
 
-            size_t cur_node_size = node_stat.st_size;
+            uint64_t cur_node_size = node_stat.st_size;
 
             if (cur_node_size != node->size) {
                 fclose(cur_part_file);
@@ -977,8 +1014,8 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             uint32_t crc = 0;
             bool began_crc = false;
 
-            size_t packed_data_len = 0;
-            size_t raw_data_len = 0;
+            uint64_t packed_data_len = 0;
+            uint64_t raw_data_len = 0;
 
             void *compress_handle = NULL;
 
@@ -992,7 +1029,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
             size_t read_bytes = 0;
             clearerr(cur_node_file);
-            size_t remaining = cur_node_size;
+            uint64_t remaining = cur_node_size;
             while ((read_bytes = fread(read_buffer, 1, IO_BUFFER_LEN, cur_node_file)) > 0) {
                 if (read_bytes > remaining) {
                     free(cur_part_path);

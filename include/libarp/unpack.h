@@ -11,6 +11,7 @@
 
 #include "libarp/common.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 
 #define ARP_STREAM_EOF 0xDEADDEAD
@@ -22,7 +23,7 @@ typedef struct ArpResourceMeta {
     char *base_name;
     char *extension;
     char *media_type;
-    size_t size;
+    uint64_t size;
 
     void *extra;
 } arp_resource_meta_t;

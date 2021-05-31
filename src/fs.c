@@ -45,6 +45,11 @@ DirHandle open_directory(const char *path) {
     #ifdef _WIN32
     char *new_path = NULL;
     size_t new_path_len_b = strlen(path) + 3;
+    if (new_path_len_b < strlen(path)) {
+        libarp_set_error("Path too long");
+        return NULL;
+    }
+
     if ((new_path = malloc(new_path_len_b)) == NULL) {
         free(handle);
 

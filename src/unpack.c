@@ -89,7 +89,7 @@ static int _parse_package_header(arp_package_t *pack, const unsigned char header
     return 0;
 }
 
-static int _validate_package_header(const arp_package_t *pack, const size_t pack_size) {
+static int _validate_package_header(const arp_package_t *pack, const uint64_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
         libarp_set_error("Package compression type is not supported");
@@ -142,6 +142,13 @@ static int _validate_package_header(const arp_package_t *pack, const size_t pack
     } else if (pack->body_off < pack->cat_off && pack->body_off + pack->body_len > pack->cat_off) {
         libarp_set_error("Body section would overlap package catalogue");
         return EINVAL;
+    }
+
+    if (pack->cat_off > SIZE_MAX || pack->cat_len > SIZE_MAX
+            || pack->body_off > SIZE_MAX || pack->body_len > SIZE_MAX) {
+        //TODO: work around this at some point
+        libarp_set_error("Package is too large to load on a 32-bit architecture");
+        return E2BIG;
     }
 
     return 0;
@@ -413,7 +420,7 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
     return 0;
 }
 
-static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
+static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
         libarp_set_error("calloc failed");
         return -1;
@@ -422,13 +429,18 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
     unsigned char *catalogue = (unsigned char*) ((uintptr_t) pack_data_view + pack->cat_off);
     
     size_t node_start = 0;
-    size_t real_node_count = 0;
-    size_t real_resource_count = 0;
+    uint32_t real_node_count = 0;
+    uint32_t real_resource_count = 0;
     for (size_t i = 0; i < pack->node_count; i++) {
         if (pack->cat_len - node_start < ND_LEN_LEN) {
             libarp_set_error("Catalogue underflow");
 
             return -1;
+        }
+
+        if (real_node_count > UINT32_MAX) {
+            libarp_set_error("Package contains too many nodes");
+            return E2BIG;
         }
         
         real_node_count += 1;
@@ -523,6 +535,11 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
                 return -1;
             }
         } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
+            if (real_resource_count > UINT32_MAX) {
+                libarp_set_error("Package contains too many resources");
+                return E2BIG;
+            }
+
             real_resource_count += 1;
         }
     }
@@ -547,13 +564,19 @@ static int _parse_package_catalogue(arp_package_t *pack, void *pack_data_view) {
         }
 
         uint64_t child_count = node->packed_data_len / 4;
+
+        if (child_count >= SIZE_MAX) {
+            libarp_set_error("Too many directory children to store in binary tree");
+            return E2BIG;
+        }
+
         uint32_t *node_children = (uint32_t*) ((uintptr_t) body + node->data_off);
 
-        if (bt_create(child_count + 1, &node->children_tree) == NULL) {
+        if (bt_create((size_t) (child_count + 1), &node->children_tree) == NULL) {
             return errno;
         }
 
-        for (uint64_t j = 0; j < child_count; j++) {
+        for (size_t j = 0; j < child_count; j++) {
             uint32_t child_index = node_children[j];
 
             if (child_index == 0 || child_index >= pack->node_count) {
@@ -718,6 +741,8 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, ArpP
         unload_package(pack);
         return rc;
     }
+
+    rc = _parse_package_catalogue(pack, data);
 
     if (pack->total_parts > 1) {
         unload_package(pack);
@@ -1252,10 +1277,10 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
             assert(false);
     }
 
-    size_t unread_packed_bytes = node->packed_data_len - real_stream->packed_pos;
+    uint64_t unread_packed_bytes = node->packed_data_len - real_stream->packed_pos;
 
-    size_t unread_unpacked_bytes = node->unpacked_data_len - real_stream->unpacked_pos;
-    size_t unstreamed_unpacked_bytes = unread_unpacked_bytes + real_stream->overflow_len;
+    uint64_t unread_unpacked_bytes = node->unpacked_data_len - real_stream->unpacked_pos;
+    uint64_t unstreamed_unpacked_bytes = unread_unpacked_bytes + real_stream->overflow_len;
 
     size_t total_required_out = MIN(real_stream->chunk_len, unstreamed_unpacked_bytes);
     size_t required_from_disk = real_stream->overflow_len >= total_required_out
@@ -1591,6 +1616,11 @@ int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *runn
 
 int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path,
         arp_resource_listing_t *listing_arr, size_t *cur_off) {
+    if (*cur_off == SIZE_MAX) {
+        libarp_set_error("Too many nodes");
+        return -1;
+    }
+
     if (node->type == PACK_NODE_TYPE_RESOURCE) {
         size_t path_len_s = strlen(running_path)
                 + node->name_len_s;
