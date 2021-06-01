@@ -107,3 +107,5 @@
 #define PACK_NODE_TYPE_DIRECTORY 1
 
 #define DIRECTORY_CONTENT_MAX_LEN (4294967296 * NODE_DESC_INDEX_LEN) // we need _some_ sane limit
+
+extern int make_iso_compilers_happy;

@@ -71,3 +71,5 @@
     #error "This OS is not supported at this time."
 #endif
 #endif
+
+extern int make_iso_compilers_happy;

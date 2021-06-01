@@ -11,7 +11,7 @@
 
 #include <string.h>
 
-#include "internal/package_defines.h"
+#include "internal/defines/package.h"
 
 #define CMPR_ANY(magic) (strlen(magic) > 0)
 #define CMPR_DEFLATE(magic) (strcmp(magic, ARP_COMPRESS_MAGIC_DEFLATE) == 0)

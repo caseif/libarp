@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include "libarp/common.h"
 
 #include <stdint.h>
 

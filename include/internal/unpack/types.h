@@ -9,9 +9,9 @@
 
 #pragma once
 
-#include "libarp/common.h"
-#include "libarp/unpack.h"
-#include "internal/package_defines.h"
+#include "libarp/unpack/resource.h"
+#include "libarp/unpack/unpack.h"
+#include "internal/defines/package.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -37,7 +37,7 @@ typedef struct NodeDesc {
     char *media_type;
 
     uint64_t index;
-    arp_resource_t *loaded_data;
+    void *loaded_data;
     binary_tree_t children_tree;
 } node_desc_t;
 

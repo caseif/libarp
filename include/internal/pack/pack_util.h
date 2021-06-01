@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include "libarp/pack.h"
-#include "internal/package_defines.h"
+#include "libarp/pack/pack.h"
+#include "internal/defines/package.h"
 
 #include <stddef.h>
 

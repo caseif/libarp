@@ -10,16 +10,15 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 
-#include "libarp/common.h"
-#include "libarp/defines.h"
-#include "libarp/pack.h"
-#include "internal/file_defines.h"
-#include "internal/other_defines.h"
-#include "internal/package_defines.h"
-#include "internal/pack_util.h"
+#include "libarp/util/defines.h"
+#include "libarp/pack/pack.h"
+#include "internal/defines/file.h"
+#include "internal/defines/misc.h"
+#include "internal/defines/package.h"
+#include "internal/pack/pack_util.h"
 #include "internal/generated/media_types.csv.h"
 #include "internal/util/common.h"
-#include "internal/util/compression.h"
+#include "internal/util/compress.h"
 #include "internal/util/crc32c.h"
 #include "internal/util/csv.h"
 #include "internal/util/error.h"

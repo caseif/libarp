@@ -11,7 +11,7 @@
 #include "internal/util/common.h"
 #include "internal/util/csv.h"
 #include "internal/util/error.h"
-#include "internal/package_defines.h"
+#include "internal/defines/package.h"
 
 #include <assert.h>
 #include <stddef.h>

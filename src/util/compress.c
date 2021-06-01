@@ -8,9 +8,9 @@
  */
 
 #include "internal/util/common.h"
-#include "internal/util/compression.h"
+#include "internal/util/compress.h"
 #include "internal/util/error.h"
-#include "internal/other_defines.h"
+#include "internal/defines/misc.h"
 
 #include "zlib.h"
 

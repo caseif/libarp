@@ -9,10 +9,6 @@
 
 #pragma once
 
-#include <stddef.h>
-
 #define ERR_MSG_MAX_LEN 4096
 
-typedef void *ArpPackage;
-
-typedef const void *ConstArpPackage;
+const char *libarp_get_error(void);

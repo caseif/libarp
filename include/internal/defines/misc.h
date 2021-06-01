@@ -9,4 +9,16 @@
 
 #pragma once
 
-const char *libarp_get_error(void);
+#define USER_MT_FILE_MAX_SIZE 51200
+
+#define FILE_NESTING_LIMIT 64
+
+#ifdef _WIN32
+#define PATH_SEPARATOR "\\"
+#else
+#define PATH_SEPARATOR "/"
+#endif
+
+#define UNINIT_U32 ((int) 0xDEADBEEF)
+
+extern int make_iso_compilers_happy;
