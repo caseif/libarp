@@ -7,11 +7,11 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/bt.h"
-#include "internal/common_util.h"
-#include "internal/csv.h"
+#include "internal/util/bt.h"
+#include "internal/util/common.h"
+#include "internal/util/csv.h"
+#include "internal/util/error.h"
 #include "internal/package_defines.h"
-#include "internal/util.h"
 
 #include <assert.h>
 #include <stddef.h>

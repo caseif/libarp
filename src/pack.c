@@ -13,17 +13,17 @@
 #include "libarp/common.h"
 #include "libarp/defines.h"
 #include "libarp/pack.h"
-#include "internal/common_util.h"
-#include "internal/compression.h"
-#include "internal/crc32c.h"
-#include "internal/csv.h"
 #include "internal/file_defines.h"
-#include "internal/fs.h"
 #include "internal/other_defines.h"
 #include "internal/package_defines.h"
 #include "internal/pack_util.h"
-#include "internal/util.h"
 #include "internal/generated/media_types.csv.h"
+#include "internal/util/common.h"
+#include "internal/util/compression.h"
+#include "internal/util/crc32c.h"
+#include "internal/util/csv.h"
+#include "internal/util/error.h"
+#include "internal/util/fs.h"
 
 #include <assert.h>
 #include <errno.h>

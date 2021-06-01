@@ -7,8 +7,8 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/common_util.h"
-#include "internal/util.h"
+#include "internal/util/common.h"
+#include "internal/util/error.h"
 
 #include <stddef.h>
 #include <stdint.h>

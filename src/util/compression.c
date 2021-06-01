@@ -7,10 +7,10 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/common_util.h"
-#include "internal/compression.h"
+#include "internal/util/common.h"
+#include "internal/util/compression.h"
+#include "internal/util/error.h"
 #include "internal/other_defines.h"
-#include "internal/util.h"
 
 #include "zlib.h"
 

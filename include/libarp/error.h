@@ -9,10 +9,4 @@
 
 #pragma once
 
-#ifdef LIBARP_DEBUG
-#define libarp_set_error(msg) libarp_real_set_error(msg, __FILE__, __LINE__)
-#else
-#define libarp_set_error(msg) libarp_real_set_error(msg, "", 0)
-#endif
-
-void libarp_real_set_error(const char *msg, const char *file, int line);
+const char *libarp_get_error(void);

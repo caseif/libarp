@@ -7,8 +7,9 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/fs.h"
-#include "internal/util.h"
+#include "internal/util/common.h"
+#include "internal/util/error.h"
+#include "internal/util/fs.h"
 
 #include <errno.h>
 #include <stdbool.h>

@@ -7,7 +7,7 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/crc32c.h"
+#include "internal/util/crc32c.h"
 
 #include <stdbool.h>
 #include <stddef.h>

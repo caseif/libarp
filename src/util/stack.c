@@ -14,8 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "internal/stack.h"
-#include "internal/util.h"
+#include "internal/util/common.h"
+#include "internal/util/error.h"
+#include "internal/util/stack.h"
 
 stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack_t *storage) {
     if (el_len == 0) {

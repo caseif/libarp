@@ -7,8 +7,8 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "internal/bt.h"
-#include "internal/util.h"
+#include "internal/util/bt.h"
+#include "internal/util/error.h"
 
 #include <assert.h>
 #include <errno.h>

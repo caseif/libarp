@@ -9,10 +9,12 @@
 
 #pragma once
 
-#include <stddef.h>
-
 #define ERR_MSG_MAX_LEN 4096
 
-typedef void *ArpPackage;
+#ifdef LIBARP_DEBUG
+#define libarp_set_error(msg) libarp_real_set_error(msg, __FILE__, __LINE__)
+#else
+#define libarp_set_error(msg) libarp_real_set_error(msg, "", 0)
+#endif
 
-typedef const void *ConstArpPackage;
+void libarp_real_set_error(const char *msg, const char *file, int line);

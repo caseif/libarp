@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "internal/bt.h"
+#include "internal/util/bt.h"
 
 #include <stdint.h>
 

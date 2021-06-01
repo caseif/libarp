@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "internal/stack.h"
+#include "internal/util/stack.h"
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -12,16 +12,16 @@
 
 #include "libarp/defines.h"
 #include "libarp/unpack.h"
-#include "internal/bt.h"
-#include "internal/common_util.h"
-#include "internal/compression.h"
-#include "internal/crc32c.h"
 #include "internal/file_defines.h"
 #include "internal/other_defines.h"
 #include "internal/package_defines.h"
-#include "internal/stack.h"
 #include "internal/unpack_util.h"
-#include "internal/util.h"
+#include "internal/util/bt.h"
+#include "internal/util/common.h"
+#include "internal/util/compression.h"
+#include "internal/util/crc32c.h"
+#include "internal/util/error.h"
+#include "internal/util/stack.h"
 
 #include "zlib.h"
 

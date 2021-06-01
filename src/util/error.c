@@ -7,8 +7,8 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "libarp/common.h"
-#include "internal/util.h"
+#include "libarp/error.h"
+#include "internal/util/error.h"
 
 #include <stdio.h>
 #include <string.h>
