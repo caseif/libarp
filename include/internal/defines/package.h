@@ -9,9 +9,9 @@
 
 #pragma once
 
-#include "internal/util/bt.h"
-
 #include <stdint.h>
+
+// defines in this header are taken from the ARP specification
 
 #define PACKAGE_EXT "arp"
 

@@ -11,7 +11,9 @@
 
 #include "libarp/unpack/resource.h"
 #include "libarp/unpack/unpack.h"
+#include "internal/defines/misc.h"
 #include "internal/defines/package.h"
+#include "internal/util/bt.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -40,6 +42,10 @@ typedef struct NodeDesc {
     void *loaded_data;
     binary_tree_t children_tree;
 } node_desc_t;
+
+typedef struct ArpPackageSetStruct {
+    binary_tree_t tree;
+} arp_package_set_t;
 
 typedef struct ArpPackageStruct {
     uint16_t major_version;

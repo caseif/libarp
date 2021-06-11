@@ -17,9 +17,10 @@
 
 struct BtNode;
 
-typedef bool BtNodeColor;
-#define BT_RED true
-#define BT_BLACK false
+typedef uint8_t BtNodeColor;
+#define BT_BLACK 0
+#define BT_RED 1
+#define BT_DBL_BLACK 2
 
 typedef struct BtNode {
     // this count includes the top-level node itself
@@ -28,6 +29,7 @@ typedef struct BtNode {
     struct BtNode *parent;
     void *data;
     BtNodeColor color;
+    size_t index;
 } bt_node_t;
 
 typedef struct BinaryTree {
@@ -50,6 +52,10 @@ binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out);
 void bt_free(binary_tree_t *tree);
 
 void bt_insert(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn);
+
+bool bt_insert_distinct(binary_tree_t *tree, void *data, BtInsertCmpFn cmp_fn);
+
+void bt_remove(binary_tree_t *tree, const void *needle, BtInsertCmpFn cmp_fn);
 
 void *bt_find(const binary_tree_t *tree, const void *needle, BtFindCmpFn cmp_fn);
 

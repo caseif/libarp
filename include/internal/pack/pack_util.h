@@ -12,7 +12,9 @@
 #include "libarp/pack/pack.h"
 #include "internal/defines/package.h"
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define FS_NODE_TYPE_DIR 'd'
 #define FS_NODE_TYPE_FILE 'f'

@@ -728,7 +728,11 @@ int load_package_from_memory(const unsigned char *data, size_t package_len, ArpP
         return rc;
     }
 
-    rc = _parse_package_catalogue(pack, data);
+    if ((rc = _parse_package_catalogue(pack, data)) != 0) {
+        unload_package(pack);
+
+        return rc;
+    }
 
     if (pack->total_parts > 1) {
         unload_package(pack);

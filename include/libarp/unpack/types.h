@@ -3,8 +3,10 @@
 #include <stdint.h>
 
 typedef void *ArpPackage;
-
 typedef const void *ConstArpPackage;
+
+typedef void *ArpPackageSet;
+typedef const void *ConstArpPackageSet;
 
 typedef struct ArpResourceMeta {
     ArpPackage package;
