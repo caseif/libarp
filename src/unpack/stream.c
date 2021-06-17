@@ -212,7 +212,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
                     size_t unpacked_len = 0;
                     int rc = 0;
                     if ((rc = decompress_deflate(real_stream->compression_data, read_buf, read_bytes,
-                            &unpack_buf, &unpacked_len) != 0)) {
+                            &unpack_buf, &unpacked_len)) != 0) {
                         return rc;
                     }
 

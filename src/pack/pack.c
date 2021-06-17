@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #ifdef _WIN32
+#include <direct.h>
 #include <shlwapi.h>
 #else
 #include <libgen.h>

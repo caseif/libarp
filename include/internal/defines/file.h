@@ -16,6 +16,7 @@
 #define UNIX_PATH_DELIMITER '/'
 
 #ifdef _WIN32
+    #include <direct.h>
     #include <stdio.h>
     #include <windows.h>
 

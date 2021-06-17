@@ -16,9 +16,6 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#define _CRT_NONSTDC_NO_DEPRECATE
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_DEPRECATE
 #include <intrin.h>
 #include <memoryapi.h>
 #include <windows.h>

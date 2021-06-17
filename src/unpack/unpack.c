@@ -16,6 +16,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <direct.h>
+#endif
+
 int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         uint16_t *last_part_index, FILE **last_part);
 
