@@ -324,8 +324,6 @@ static void _delete_node(binary_tree_t *tree, bt_node_t *node) {
 // Removes a node from the tree's structure, freeing a slot in the tree's
 // storage in the process.
 static void _remove_node(binary_tree_t *tree, bt_node_t *node) {
-    bt_node_t *to_delete = NULL;
-    
     // special case: tree size of 1
     if (node == tree->root && node->l == NULL && node->r == NULL) {
         tree->root = NULL;
@@ -346,8 +344,6 @@ static void _remove_node(binary_tree_t *tree, bt_node_t *node) {
         }
 
         replacement = NULL;
-
-        to_delete = node;
     } else if (node->l != NULL ^ node->r != NULL) {
         // node has exactly one child
         bt_node_t *child = node->l;
