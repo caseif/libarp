@@ -149,7 +149,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
         memcpy(target_buf, real_stream->overflow_buf, total_required_out);
 
         size_t extra_overflow = real_stream->overflow_len - total_required_out;
-        void *extra_start = (void*) ((uintptr_t) real_stream->overflow_buf + total_required_out);
+        void *extra_start = (char*) real_stream->overflow_buf + total_required_out;
 
         if (extra_overflow > 0) {
              if (extra_overflow > total_required_out) {
@@ -204,7 +204,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
             size_t copied_bytes = read_bytes;
             to_read -= read_bytes;
 
-            void *offset_buf = (void*) ((uintptr_t) target_buf + output_buf_off);
+            void *offset_buf = (char*) target_buf + output_buf_off;
 
             if (CMPR_ANY(pack->compression_type)) {
                 if (CMPR_DEFLATE(pack->compression_type)) {
@@ -218,7 +218,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
 
                     if (unpacked_len > remaining_needed) {
                         size_t overflowed_bytes = unpacked_len - remaining_needed;
-                        void *overflow_start = (void*) ((uintptr_t) unpack_buf + remaining_needed);
+                        void *overflow_start = (char*) unpack_buf + remaining_needed;
                         if (real_stream->overflow_cap == 0) {
                             // we multiply by 2 to hopefully avoid having to realloc later in the stream
                             if ((real_stream->overflow_buf = malloc(overflowed_bytes * 2)) == NULL) {
@@ -237,8 +237,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
                             real_stream->overflow_buf = new_overflow_buf;
                         }
 
-                        void *offset_overflow_buf = (void*) ((uintptr_t) real_stream->overflow_buf
-                                + real_stream->overflow_len);
+                        void *offset_overflow_buf = (char*) real_stream->overflow_buf + real_stream->overflow_len;
                         memcpy(offset_overflow_buf, overflow_start, overflowed_bytes);
 
                         real_stream->overflow_len += overflowed_bytes;

@@ -51,7 +51,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         stat_t dir_stat;
         if (stat(new_dir_path, &dir_stat) != 0) {
             if (errno == ENOENT) {
-                if (mkdir(new_dir_path, 0755) != 0) {
+                if (mkdir(new_dir_path, PERM_MASK_RWX_RX_RX) != 0) {
                     free(new_dir_path);
 
                     char err_msg[ERR_MSG_MAX_LEN];

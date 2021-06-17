@@ -71,13 +71,13 @@ static inline uint32_t _x86_crc32c(uint32_t initial, const void *data, size_t le
     uint32_t crc = initial;
     for (size_t i = 0; i < len - (len % data_block_len); i += data_block_len) {
         #ifdef ARCH_X86_64
-        crc = _mm_crc32_u64(crc, *((uint64_t*) ((uintptr_t) data + i)));
+        crc = _mm_crc32_u64(crc, *((uint64_t*) ((char*) data + i)));
         #else
         crc = _mm_crc32_u32(crc, *((uint32_t*) ((uintptr_t) data + i)));
         #endif
     }
     for (size_t i = len - (len % data_block_len); i < len; i++) {
-        crc = _mm_crc32_u8(crc, *((uint8_t*) ((uintptr_t) data + i)));
+        crc = _mm_crc32_u8(crc, *((uint8_t*) ((char*) data + i)));
     }
     return ~crc;
 }

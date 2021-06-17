@@ -34,7 +34,7 @@ typedef struct DeflateStream {
     unsigned char out_buf[DEFLATE_CHUNK_LEN];
 } deflate_stream_t;
 
-DeflateStream compress_deflate_begin(const uint64_t total_input_bytes) {
+DeflateStream compress_deflate_begin(uint64_t total_input_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -88,7 +88,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
         real_stream->zlib_stream.next_in = data_window;
 
         remaining -= to_read;
-        data_window = (void*) ((uintptr_t) data_window + to_read);
+        data_window = (char*) data_window + to_read;
 
         real_stream->zlib_stream.avail_out = sizeof(real_stream->out_buf);
         real_stream->zlib_stream.next_out = real_stream->out_buf;
@@ -118,7 +118,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
                 output_buf = output_buf_new;
             }
 
-            memcpy((void*) ((uintptr_t) output_buf + total_out_bytes), real_stream->out_buf, out_bytes);
+            memcpy((char*) output_buf + total_out_bytes, real_stream->out_buf, out_bytes);
 
             total_out_bytes += out_bytes;
             real_stream->processed_bytes += to_read;
@@ -144,7 +144,7 @@ void compress_deflate_end(DeflateStream stream) {
     free(real_stream);
 }
 
-DeflateStream decompress_deflate_begin(const uint64_t total_input_bytes, const uint64_t total_output_bytes) {
+DeflateStream decompress_deflate_begin(uint64_t total_input_bytes, const uint64_t total_output_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -200,7 +200,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
         defl_stream->next_in = (void*) data_window;
 
         remaining -= to_read;
-        data_window = (void*) ((uintptr_t) data_window + to_read);
+        data_window = (char*) data_window + to_read;
 
         do {
             defl_stream->avail_out = sizeof(real_stream->out_buf);
@@ -254,7 +254,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                 output_buf = output_buf_new;
             }
 
-            memcpy((void*) ((uintptr_t) output_buf + total_out_bytes), real_stream->out_buf, out_bytes);
+            memcpy((char*) output_buf + total_out_bytes, real_stream->out_buf, out_bytes);
             total_out_bytes += out_bytes;
 
             if (at_end || remaining == 0) {

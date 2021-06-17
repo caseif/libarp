@@ -89,7 +89,7 @@ int stack_push(stack_t *stack, void *data) {
         stack->data = new_data;
     }
 
-    memcpy((void*) ((uintptr_t) stack->data + (stack->index * stack->el_len)), data, stack->el_len);
+    memcpy((char*) stack->data + (stack->index * stack->el_len), data, stack->el_len);
 
     stack->index += 1;
 
@@ -103,7 +103,7 @@ void *stack_pop(stack_t *stack) {
 
     stack->index -= 1;
 
-    return (void*) ((uintptr_t) stack->data + (stack->index * stack->el_len));
+    return (char*) stack->data + (stack->index * stack->el_len);
 }
 
 void stack_clear(stack_t *stack) {

@@ -17,6 +17,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <intrin.h>
+#include <io.h>
 #include <memoryapi.h>
 #include <windows.h>
 #else

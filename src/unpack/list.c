@@ -163,6 +163,7 @@ void free_resource_listing(arp_resource_listing_t *listing, size_t count) {
     for (size_t i = 0; i < count; i++) {
         if (listing->path != NULL) {
             free(listing->path);
+            listing->path = NULL; // not required but for some reason clang throws a warning without it
         }
     }
 

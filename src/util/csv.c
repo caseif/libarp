@@ -98,7 +98,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     memcpy(tree_data, stock_csv, stock_len);
     if (user_csv != NULL && user_len > 0) {
         ((char*) tree_data)[stock_len] = '\n';
-        memcpy((void*) ((uintptr_t) tree_data + stock_len + 1), user_csv, user_len);
+        memcpy((char*) tree_data + stock_len + 1, user_csv, user_len);
     }
 
     ((char*) tree_data)[total_len - 1] = '\0';

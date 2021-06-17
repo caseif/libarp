@@ -15,6 +15,8 @@
 #define WIN32_PATH_DELIMITER '\\'
 #define UNIX_PATH_DELIMITER '/'
 
+#define PERM_MASK_RWX_RX_RX 0755
+
 #ifdef _WIN32
     #include <direct.h>
     #include <stdio.h>

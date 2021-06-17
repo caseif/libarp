@@ -846,7 +846,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
     unsigned char read_buffer[IO_BUFFER_LEN];
 
-    if (fseek(cur_part_file, sizes->first_body_off, SEEK_SET) != 0) {
+    if (sizes->first_body_off > LONG_MAX || fseek(cur_part_file, (long) sizes->first_body_off, SEEK_SET) != 0) {
         fclose(cur_part_file);
         unlink(cur_part_path);
         free(cur_part_path);
@@ -1152,7 +1152,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         return -1;
     }
 
-    if (fseek(first_part_file, sizes->cat_off, SEEK_SET) != 0) {
+    if (sizes->cat_off > LONG_MAX || fseek(first_part_file, (long) sizes->cat_off, SEEK_SET) != 0) {
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
         libarp_set_error("Failed to seek to catalogue offset");
@@ -1321,7 +1321,7 @@ static bool validate_output_path(const char *output_path) {
     stat_t output_stat;
     if (stat(output_path, &output_stat) != 0) {
         if (errno == ENOENT) {
-            if (mkdir(output_path, 0755) != 0) {
+            if (mkdir(output_path, PERM_MASK_RWX_RX_RX) != 0) {
                 switch (errno) {
                     case EACCES: {
                         libarp_set_error("Cannot access output path prefix");

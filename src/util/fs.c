@@ -7,6 +7,7 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#include "internal/defines/misc.h"
 #include "internal/util/common.h"
 #include "internal/util/error.h"
 #include "internal/util/fs.h"
@@ -37,7 +38,7 @@ typedef struct DirHandleStruct {
 } dir_handle_t;
 
 DirHandle open_directory(const char *path) {
-    dir_handle_t *handle;
+    dir_handle_t *handle = NULL;
     if ((handle = malloc(sizeof(dir_handle_t))) == NULL) {
         libarp_set_error("malloc failed");
         return NULL;
@@ -136,7 +137,7 @@ void close_directory(DirHandle dir) {
         libarp_set_error("Failed to close directory");
     }
     #else
-    int rc;
+    int rc = UNINIT_U32;
     if ((rc = closedir(real_dir->dir)) != 0) {
         errno = rc;
         libarp_set_error("Failed to close directory");

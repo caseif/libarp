@@ -29,7 +29,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
         part_file = part;
 
         if ((rc = setup_part_file_for_node(part_file, node)) != 0) {
-            return 0;
+            return rc;
         }
     } else {
         if ((part_file = open_part_file_for_node(node)) == NULL) {
@@ -100,9 +100,12 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
 
         if (CMPR_ANY(pack->compression_type)) {
             if (CMPR_DEFLATE(pack->compression_type)) {
-                int rc = UNINIT_U32;
                 if ((rc = decompress_deflate(compress_data, read_buf, to_read,
                         &unpacked_chunk, &unpacked_chunk_len)) != 0) {
+                    if (unpacked_data != NULL) {
+                        free(unpacked_data);
+                    }
+
                     decompress_deflate_end(compress_data);
 
                     return rc;
@@ -119,7 +122,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
                 return errno;
             }
         } else {
-            memcpy((void*) ((uintptr_t) unpacked_data + written_bytes), unpacked_chunk, unpacked_chunk_len);
+            memcpy((char*) unpacked_data + written_bytes, unpacked_chunk, unpacked_chunk_len);
         }
 
         written_bytes += unpacked_chunk_len;
