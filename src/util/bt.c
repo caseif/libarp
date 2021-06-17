@@ -344,7 +344,7 @@ static void _remove_node(binary_tree_t *tree, bt_node_t *node) {
         }
 
         replacement = NULL;
-    } else if (node->l != NULL ^ node->r != NULL) {
+    } else if ((node->l != NULL) ^ (node->r != NULL)) {
         // node has exactly one child
         bt_node_t *child = node->l;
         if (child == NULL) {
