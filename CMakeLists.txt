@@ -70,6 +70,10 @@ if(WIN32)
 endif()
 
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
+set(PACK_SRC_DIR "${SRC_DIR}/pack")
+set(UNPACK_SRC_DIR "${SRC_DIR}/unpack")
+set(UTIL_SRC_DIR "${SRC_DIR}/util")
+
 set(INC_DIR "${PROJECT_SOURCE_DIR}/include")
 set(TOOLING_DIR "${PROJECT_SOURCE_DIR}/tooling")
 
@@ -100,7 +104,18 @@ if(CMD_RES)
 endif()
 
 # source files
-file(GLOB_RECURSE C_FILES ${SRC_DIR}/*.c)
+file(GLOB_RECURSE GENERATED_C_FILES ${GENERATED_SRC_DIR}/*.c)
+list(APPEND C_FILES "${GENERATED_C_FILES}")
+file(GLOB_RECURSE UTIL_C_FILES ${UTIL_SRC_DIR}/*.c)
+list(APPEND C_FILES "${UTIL_C_FILES}")
+if(${LIBARP_FEATURE_PACK})
+  file(GLOB_RECURSE PACK_C_FILES ${PACK_SRC_DIR}/*.c)
+  list(APPEND C_FILES "${PACK_C_FILES}")
+  endif()
+  if(${LIBARP_FEATURE_UNPACK})
+  file(GLOB_RECURSE UNPACK_C_FILES ${UNPACK_SRC_DIR}/*.c)
+  list(APPEND C_FILES "${UNPACK_C_FILES}")
+endif()
 file(GLOB_RECURSE H_FILES ${SRC_DIR}/*.h)
 
 set(DIST_DIR "${PROJECT_BINARY_DIR}/dist")
