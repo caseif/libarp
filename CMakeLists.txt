@@ -48,22 +48,25 @@ set(EXT_LIBS "")
 set(EXT_LIBS_STATIC "")
 
 if(${LIBARP_FEATURE_DEFLATE})
-  set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
-  configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
-  set(ZLIB_LIBRARY "zlib")
-  set(ZLIB_LIBRARY_STATIC "zlibstatic")
-  set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(ZLIB_INCLUDE_DIR "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
-  add_subdirectory("${ZLIB_SOURCE_DIR}")
-  set_target_properties(minigzip example
-                          PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
-  if(TARGET minigzip64)
-    set_target_properties(minigzip64 example64
-                            PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
-  endif()
   add_definitions("-DFEATURE_DEFLATE")
   list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
   list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
+
+  if(NOT TARGET "zlib")
+    set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
+    configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
+    set(ZLIB_LIBRARY "zlib")
+    set(ZLIB_LIBRARY_STATIC "zlibstatic")
+    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${ZLIB_SOURCE_DIR}")
+    set_target_properties(minigzip example
+                            PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+    if(TARGET minigzip64)
+      set_target_properties(minigzip64 example64
+                              PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+    endif()
+  endif()
 endif()
 
 if(WIN32)
@@ -79,8 +82,11 @@ set(UTIL_SRC_DIR "${SRC_DIR}/util")
 set(INC_DIR "${PROJECT_SOURCE_DIR}/include")
 set(TOOLING_DIR "${PROJECT_SOURCE_DIR}/tooling")
 
-set(GENERATED_SRC_DIR "${SRC_DIR}/generated")
-set(GENERATED_INC_DIR "${INC_DIR}/internal/generated")
+set(TEMP_INC_DIR "${PROJECT_BINARY_DIR}/include.tmp")
+set(TEMP_SRC_DIR "${PROJECT_BINARY_DIR}/src.tmp")
+
+set(GENERATED_SRC_DIR "${TEMP_SRC_DIR}/internal/generated")
+set(GENERATED_INC_DIR "${TEMP_INC_DIR}/internal/generated")
 
 # generate resource sources
 # first we generate a master media type map
@@ -140,8 +146,8 @@ add_custom_command(TARGET ${HDR_TARGET} POST_BUILD
 add_library("${PROJECT_NAME}" SHARED ${C_FILES} ${H_FILES})
 add_library("${PROJECT_NAME}_static" STATIC ${C_FILES} ${H_FILES})
 
-target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR}")
-target_include_directories("${PROJECT_NAME}_static" PUBLIC "${INC_DIR}")
+target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR};${TEMP_INC_DIR}")
+target_include_directories("${PROJECT_NAME}_static" PUBLIC "${INC_DIR};${TEMP_INC_DIR}")
 
 if(${LIBARP_FEATURE_DEFLATE})
   target_include_directories("${PROJECT_NAME}" PUBLIC "${ZLIB_INCLUDE_DIR}")
