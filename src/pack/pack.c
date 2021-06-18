@@ -10,8 +10,8 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 
-#include "libarp/util/defines.h"
-#include "libarp/pack/pack.h"
+#include "arp/util/defines.h"
+#include "arp/pack/pack.h"
 #include "internal/defines/file.h"
 #include "internal/defines/misc.h"
 #include "internal/defines/package.h"

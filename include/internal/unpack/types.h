@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include "libarp/unpack/resource.h"
-#include "libarp/unpack/unpack.h"
+#include "arp/unpack/resource.h"
+#include "arp/unpack/unpack.h"
 #include "internal/defines/misc.h"
 #include "internal/defines/package.h"
 #include "internal/util/bt.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "libarp/unpack/types.h"
+#include "arp/unpack/types.h"
 
 int unpack_arp_to_fs(ConstArpPackage package, const char *target_dir);
 

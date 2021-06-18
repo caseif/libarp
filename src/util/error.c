@@ -7,7 +7,7 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
-#include "libarp/util/error.h"
+#include "arp/util/error.h"
 #include "internal/util/error.h"
 
 #include <stdio.h>

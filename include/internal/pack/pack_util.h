@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "libarp/pack/pack.h"
+#include "arp/pack/pack.h"
 #include "internal/defines/package.h"
 
 #include <stdbool.h>

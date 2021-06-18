@@ -1,6 +1,6 @@
 #pragma once
 
-#include "libarp/unpack/types.h"
+#include "arp/unpack/types.h"
 
 typedef struct ArpResource {
     arp_resource_meta_t meta;
