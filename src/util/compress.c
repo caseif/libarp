@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef FEATURE_DEFLATE
 #define DEFLATE_CHUNK_LEN 262144 // 256K
 
 #define DEFLATE_BUF_MARGIN 1.1L
@@ -286,3 +287,4 @@ void decompress_deflate_end(DeflateStream stream) {
 
     free(real_stream);
 }
+#endif

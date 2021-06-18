@@ -82,7 +82,14 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     if (compression_type != NULL && strlen(compression_type) > 0) {
         char *compress_magic = NULL;
         if (strcmp(compression_type, ARP_COMPRESS_TYPE_DEFLATE) == 0) {
+            #ifdef FEATURE_DEFLATE
             compress_magic = ARP_COMPRESS_MAGIC_DEFLATE;
+            #else
+            free(opts);
+
+            libarp_set_error(DEFLATE_SUPPORT_ERROR);
+            return NULL;
+            #endif
         } else {
             free(opts);
 

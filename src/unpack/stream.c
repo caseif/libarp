@@ -176,8 +176,18 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
         // we account for the data already in the overflow buffer to hopefully minimize the utilization of it
         size_t max_to_read = required_from_disk;
         if (CMPR_ANY(node->package->compression_type)) {
-            // include a small buffer space to allow efficient processing of uncompressible data
-            max_to_read *= DEFLATE_BUF_MARGIN;
+            if (CMPR_DEFLATE(node->package->compression_type)) {
+                #ifdef FEATURE_DEFLATE
+                // include a small buffer space to allow efficient processing of uncompressible data
+                max_to_read *= DEFLATE_BUF_MARGIN;
+                #else
+                libarp_set_error(DEFLATE_SUPPORT_ERROR);
+                return -1;
+                #endif
+            } else {
+                libarp_set_error("Unrecognized compression type");
+                return -1;
+            }
         }
 
         size_t output_buf_off = 0;

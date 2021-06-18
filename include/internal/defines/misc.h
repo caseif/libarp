@@ -21,4 +21,6 @@
 
 #define UNINIT_U32 ((int) 0xDEADBEEF)
 
+#define DEFLATE_SUPPORT_ERROR "libarp was not compiled with DEFLATE support"
+
 extern int make_iso_compilers_happy;
