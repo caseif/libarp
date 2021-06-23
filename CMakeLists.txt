@@ -180,10 +180,6 @@ set_target_properties("${PROJECT_NAME}_static" PROPERTIES DEBUG_POSTFIX "d")
 target_compile_definitions("${PROJECT_NAME}" PUBLIC "$<$<CONFIG:DEBUG>:LIBARP_DEBUG>")
 target_compile_definitions("${PROJECT_NAME}_static" PUBLIC "$<$<CONFIG:DEBUG>:LIBARP_DEBUG>")
 
-if(CMAKE_BUILD_TYPE MATCHES "Debug")
-  set_target_properties("${PROJECT_NAME}" PROPERTIES NO_SONAME 1)
-endif()
-
 if(MSVC)
   add_compile_definitions("_CRT_SECURE_NO_WARNINGS" "_CRT_NONSTDC_NO_WARNINGS")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4 /wd4244 /wd4267")
