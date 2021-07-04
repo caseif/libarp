@@ -11,4 +11,4 @@
 
 #define ERR_MSG_MAX_LEN 4096
 
-const char *libarp_get_error(void);
+const char *arp_get_error(void);

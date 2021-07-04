@@ -19,7 +19,7 @@
 
 #define DEFLATE_BUF_MARGIN 1.05L
 
-ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len) {
+ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len) {
     if (chunk_len == 0 || chunk_len > INT_MAX) {
         errno = EINVAL;
         libarp_set_error("Streaming chunk length must be between 1 and 2147483647 bytes");
@@ -108,7 +108,7 @@ ArpResourceStream create_resource_stream(arp_resource_meta_t *meta, size_t chunk
     return stream;
 }
 
-int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len) {
+int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_len) {
     arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
 
     node_desc_t *node = (node_desc_t*) real_stream->meta.extra;
@@ -285,7 +285,7 @@ int stream_resource(ArpResourceStream stream, void **out_data, size_t *out_data_
     return 0;
 }
 
-void free_resource_stream(ArpResourceStream stream) {
+void arp_free_resource_stream(ArpResourceStream stream) {
     arp_resource_stream_t *real_stream = (arp_resource_stream_t*) stream;
     node_desc_t *node = (node_desc_t*) real_stream->meta.extra;
 

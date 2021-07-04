@@ -14,7 +14,7 @@ static int _package_cmp_fn(const arp_package_t *a, const arp_package_t *b) {
     return strncmp(a->package_namespace, b->package_namespace, sizeof(a->package_namespace));
 }
 
-ArpPackageSet create_package_set(void) {
+ArpPackageSet arp_create_set(void) {
     arp_package_set_t *set = NULL;
     if ((set = malloc(sizeof(arp_package_set_t))) == NULL) {
         libarp_set_error("malloc failed");
@@ -32,7 +32,7 @@ ArpPackageSet create_package_set(void) {
     return set;
 }
 
-int add_package_to_set(ArpPackageSet set, ArpPackage package) {
+int arp_add_to_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
     if (!bt_insert_distinct(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn)) {
         libarp_set_error("Set contains package with identical namespace");
@@ -42,12 +42,12 @@ int add_package_to_set(ArpPackageSet set, ArpPackage package) {
     return 0;
 }
 
-void remove_package_from_set(ArpPackageSet set, ArpPackage package) {
+void arp_remove_from_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
     bt_remove(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn);
 }
 
-void destroy_package_set(ArpPackageSet set) {
+void arp_destroy_set(ArpPackageSet set) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
 
     bt_free(&real_set->tree);

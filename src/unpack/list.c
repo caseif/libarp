@@ -112,7 +112,7 @@ static int _list_node_contents(node_desc_t *node, const char *pack_ns, const cha
     }
 }
 
-int get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listing_arr_out, size_t *count_out) {
+int arp_get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listing_arr_out, size_t *count_out) {
     *listing_arr_out = NULL;
     *count_out = 0;
 
@@ -155,7 +155,7 @@ int get_resource_listing(ConstArpPackage package, arp_resource_listing_t **listi
     return 0;
 }
 
-void free_resource_listing(arp_resource_listing_t *listing, size_t count) {
+void arp_free_resource_listing(arp_resource_listing_t *listing, size_t count) {
     if (listing == NULL) {
         return;
     }

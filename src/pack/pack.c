@@ -45,7 +45,7 @@
 #define IO_BUFFER_LEN (128 * 1024) // 128 KB
 #define DIR_LIST_BUFFER_LEN 1024 // 4 KB
 
-ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *pack_namespace, uint64_t max_part_len,
+ArpPackingOptions arp_create_v1_packing_options(const char *pack_name, const char *pack_namespace, uint64_t max_part_len,
         const char *compression_type, const char *media_types_path) {
     size_t name_len_s = strlen(pack_name);
     size_t namespace_len_s = strlen(pack_namespace);
@@ -107,7 +107,7 @@ ArpPackingOptions create_v1_packing_options(const char *pack_name, const char *p
     return opts;
 }
 
-void free_packing_options(ArpPackingOptions opts) {
+void arp_free_packing_options(ArpPackingOptions opts) {
     if (opts == NULL) {
         return;
     }
@@ -1394,7 +1394,7 @@ static bool validate_output_path(const char *output_path) {
     return true;
 }
 
-int create_arp_from_fs(const char *src_path, const char *output_dir, ArpPackingOptions opts,
+int arp_pack_from_fs(const char *src_path, const char *output_dir, ArpPackingOptions opts,
         void (*msg_callback)(const char*)) {
     arp_packing_options_t *real_opts = (arp_packing_options_t*) opts;
 

@@ -2,10 +2,10 @@
 
 #include "arp/unpack/types.h"
 
-ArpPackageSet create_package_set(void);
+ArpPackageSet arp_create_set(void);
 
-int add_package_to_set(ArpPackageSet set, ArpPackage package);
+int arp_add_to_set(ArpPackageSet set, ArpPackage package);
 
-void remove_package_from_set(ArpPackageSet set, ArpPackage package);
+void arp_remove_from_set(ArpPackageSet set, ArpPackage package);
 
-void destroy_package_set(ArpPackageSet set);
+void arp_destroy_set(ArpPackageSet set);

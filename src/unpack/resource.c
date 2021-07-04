@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-arp_resource_t *load_resource(arp_resource_meta_t *meta) {
+arp_resource_t *arp_load_resource(arp_resource_meta_t *meta) {
     node_desc_t *node = (node_desc_t*) meta->extra;
 
     if (node->loaded_data != NULL) {
@@ -46,7 +46,7 @@ arp_resource_t *load_resource(arp_resource_meta_t *meta) {
     return res;
 }
 
-void unload_resource(arp_resource_t *resource) {
+void arp_unload_resource(arp_resource_t *resource) {
     if (resource == NULL) {
         return;
     }

@@ -575,7 +575,7 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s);
 }
 
-int load_package_from_file(const char *path, ArpPackage *package) {
+int arp_load_from_file(const char *path, ArpPackage *package) {
     stat_t package_file_stat;
     if (stat(path, &package_file_stat) != 0) {
         libarp_set_error("Failed to stat package file");
@@ -700,7 +700,7 @@ int load_package_from_file(const char *path, ArpPackage *package) {
     return 0;
 }
 
-int load_package_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package) {
+int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package) {
     if (package_len < PACKAGE_HEADER_LEN) {
         libarp_set_error("Package is too small to contain package header");
         return -1;
@@ -773,7 +773,7 @@ static void _unload_node(node_desc_t *node) {
     }
 }
 
-int unload_package(ArpPackage package) {
+int arp_unload(ArpPackage package) {
     arp_package_t *real_pack = (arp_package_t*)package;
 
     if (real_pack->all_nodes != NULL) {
@@ -801,7 +801,7 @@ int unload_package(ArpPackage package) {
     return 0;
 }
 
-int get_resource_meta(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta) {
+int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta) {
         const arp_package_t *real_pack = (const arp_package_t*) package;
 
     size_t path_len_s = strlen(path);
