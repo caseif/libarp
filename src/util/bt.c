@@ -207,7 +207,7 @@ binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out) {
         tree->malloced = false;
     } else {
         if ((tree = malloc(sizeof(binary_tree_t))) == NULL) {
-            libarp_set_error("malloc failed\n");
+            arp_set_error("malloc failed\n");
             errno = ENOMEM;
             return NULL;
         }
@@ -220,7 +220,7 @@ binary_tree_t *bt_create(size_t capacity, binary_tree_t *tree_out) {
             free(tree);
         }
 
-        libarp_set_error("calloc failed\n");
+        arp_set_error("calloc failed\n");
         errno = ENOMEM;
         return NULL;
     }

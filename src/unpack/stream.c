@@ -22,7 +22,7 @@
 ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t chunk_len) {
     if (chunk_len == 0 || chunk_len > INT_MAX) {
         errno = EINVAL;
-        libarp_set_error("Streaming chunk length must be between 1 and 2147483647 bytes");
+        arp_set_error("Streaming chunk length must be between 1 and 2147483647 bytes");
         return NULL;
     }
 
@@ -30,7 +30,7 @@ ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t c
 
     arp_resource_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(arp_resource_stream_t))) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }
@@ -63,7 +63,7 @@ ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t c
         fclose(stream->file);
         free(stream);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }
@@ -73,7 +73,7 @@ ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t c
         fclose(stream->file);
         free(stream);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }
@@ -84,7 +84,7 @@ ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t c
         fclose(stream->file);
         free(stream);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }
@@ -155,7 +155,7 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
              if (extra_overflow > total_required_out) {
                 void *intermediate_buf = NULL;
                 if ((intermediate_buf = malloc(extra_overflow)) == NULL) {
-                    libarp_set_error("malloc failed");
+                    arp_set_error("malloc failed");
                     return ENOMEM;
                 }
 
@@ -181,11 +181,11 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
                 // include a small buffer space to allow efficient processing of uncompressible data
                 max_to_read *= DEFLATE_BUF_MARGIN;
                 #else
-                libarp_set_error(DEFLATE_SUPPORT_ERROR);
+                arp_set_error(DEFLATE_SUPPORT_ERROR);
                 return -1;
                 #endif
             } else {
-                libarp_set_error("Unrecognized compression type");
+                arp_set_error("Unrecognized compression type");
                 return -1;
             }
         }
@@ -232,7 +232,7 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
                         if (real_stream->overflow_cap == 0) {
                             // we multiply by 2 to hopefully avoid having to realloc later in the stream
                             if ((real_stream->overflow_buf = malloc(overflowed_bytes * 2)) == NULL) {
-                                libarp_set_error("malloc failed");
+                                arp_set_error("malloc failed");
                                 return ENOMEM;
                             }
                         } else if (real_stream->overflow_cap - real_stream->overflow_len < overflowed_bytes) {
@@ -241,7 +241,7 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
                             void *new_overflow_buf = realloc(real_stream->overflow_buf,
                                     real_stream->overflow_cap + extra_needed);
                             if (new_overflow_buf == NULL) {
-                                libarp_set_error("realloc failed");
+                                arp_set_error("realloc failed");
                                 return ENOMEM;
                             }
                             real_stream->overflow_buf = new_overflow_buf;

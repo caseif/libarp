@@ -52,22 +52,22 @@ ArpPackingOptions arp_create_v1_packing_options(const char *pack_name, const cha
     size_t media_types_path_len_s = media_types_path != NULL ? strlen(media_types_path) : 0;
 
     if (name_len_s == 0) {
-        libarp_set_error("Package name must not be empty");
+        arp_set_error("Package name must not be empty");
         return NULL;
     }
 
     if (namespace_len_s == 0) {
-        libarp_set_error("Namespace must not be empty");
+        arp_set_error("Namespace must not be empty");
         return NULL;
     } else if (namespace_len_s > PACKAGE_NAMESPACE_LEN) {
-        libarp_set_error("Namespace length is too long");
+        arp_set_error("Namespace length is too long");
         return NULL;
     } else if (validate_path_component(pack_namespace, (uint8_t) namespace_len_s) != 0) {
         return NULL;
     }
 
     if (max_part_len != 0 && max_part_len < PACKAGE_MIN_PART_LEN) {
-        libarp_set_error("Max part length is too small");
+        arp_set_error("Max part length is too small");
         return NULL;
     }
 
@@ -87,13 +87,13 @@ ArpPackingOptions arp_create_v1_packing_options(const char *pack_name, const cha
             #else
             free(opts);
 
-            libarp_set_error(DEFLATE_SUPPORT_ERROR);
+            arp_set_error(DEFLATE_SUPPORT_ERROR);
             return NULL;
             #endif
         } else {
             free(opts);
 
-            libarp_set_error("Unrecognized compression type");
+            arp_set_error("Unrecognized compression type");
             return NULL;
         }
         memcpy(opts->compression_type, compress_magic, sizeof(opts->compression_type));
@@ -136,7 +136,7 @@ static csv_file_t *_load_media_types(arp_packing_options_t *opts) {
     if (opts->media_types_path != NULL) {
         FILE *user_file = fopen(opts->media_types_path, "rb");
         if (user_file == NULL) {
-            libarp_set_error("Failed to open user media types file");
+            arp_set_error("Failed to open user media types file");
             return NULL;
         }
 
@@ -144,7 +144,7 @@ static csv_file_t *_load_media_types(arp_packing_options_t *opts) {
         if (fstat(fileno(user_file), &user_file_stat) != 0) {
             fclose(user_file);
 
-            libarp_set_error("Failed to stat user media types file");
+            arp_set_error("Failed to stat user media types file");
             return NULL;
         }
 
@@ -152,20 +152,20 @@ static csv_file_t *_load_media_types(arp_packing_options_t *opts) {
         if (user_csv_len > USER_MT_FILE_MAX_SIZE) {
             fclose(user_file);
 
-            libarp_set_error("User media types file is too large");
+            arp_set_error("User media types file is too large");
             return NULL;
         }
 
         if ((user_csv = malloc(user_csv_len + 1)) == NULL) {
             fclose(user_file);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return NULL;
         }
         if (fread(user_csv, user_csv_len, 1, user_file) != 1) {
             free(user_csv);
 
-            libarp_set_error("Failed to read from user media types file");
+            arp_set_error("Failed to read from user media types file");
             return NULL;
         }
 
@@ -224,13 +224,13 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     // we only need to do the nesting limit check in this function because once
     // the fs tree is constructed, it's guaranteed to be within the limit
     if (recursion_count > FILE_NESTING_LIMIT) {
-        libarp_set_error("File nesting limit reached");
+        arp_set_error("File nesting limit reached");
         return -1;
     }
 
     fs_node_ptr node = NULL;
     if ((node = calloc(1, sizeof(fs_node_t))) == NULL) {
-        libarp_set_error("calloc failed");
+        arp_set_error("calloc failed");
         return ENOMEM;
     }
 
@@ -240,7 +240,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     if (stat(root_path, &root_stat) != 0) {
         _free_fs_node(node);
 
-        libarp_set_error("stat failed");
+        arp_set_error("stat failed");
         return -1;
     }
 
@@ -264,7 +264,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
                 _free_fs_node(node);
 
-                libarp_set_error("malloc failed");
+                arp_set_error("malloc failed");
                 return ENOMEM;
             }
 
@@ -282,7 +282,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                 free(child_full_path);
                 _free_fs_node(node);
 
-                libarp_set_error("Failed to stat directory child while constructing fs tree (pass 1)");
+                arp_set_error("Failed to stat directory child while constructing fs tree (pass 1)");
                 return errno;
             }
 
@@ -294,7 +294,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                     close_directory(root);
                     _free_fs_node(node);
 
-                    libarp_set_error("Too many directory children to count");
+                    arp_set_error("Too many directory children to count");
                     return E2BIG;
                 }
 
@@ -306,7 +306,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
             close_directory(root);
             _free_fs_node(node);
 
-            libarp_set_error("Encountered error while constructing fs tree (pass 1)");
+            arp_set_error("Encountered error while constructing fs tree (pass 1)");
             return errno;
         }
 
@@ -316,7 +316,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
             if ((node->children = calloc(node->children_count, sizeof(fs_node_ptr))) == NULL) {
                 _free_fs_node(node);
 
-                libarp_set_error("malloc failed");
+                arp_set_error("malloc failed");
                 return ENOMEM;
             }
 
@@ -331,7 +331,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                     close_directory(root);
                     _free_fs_node(node);
 
-                    libarp_set_error("Too many directory children to count");
+                    arp_set_error("Too many directory children to count");
                     return E2BIG;
                 }
 
@@ -340,7 +340,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                     close_directory(root);
                     _free_fs_node(node);
 
-                    libarp_set_error("malloc failed");
+                    arp_set_error("malloc failed");
                     return ENOMEM;
                 }
 
@@ -353,7 +353,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
                     free(child_full_path);
                     _free_fs_node(node);
 
-                    libarp_set_error("Failed to stat directory child while constructing fs tree (pass 2)");
+                    arp_set_error("Failed to stat directory child while constructing fs tree (pass 2)");
                     return errno;
                 }
 
@@ -388,7 +388,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
             if (errno != 0) {
                 _free_fs_node(node);
 
-                libarp_set_error("Encountered error while building fs tree (pass 2)");
+                arp_set_error("Encountered error while building fs tree (pass 2)");
                 return errno;
             }
 
@@ -408,7 +408,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         *res = NULL;
 
         if (recursion_count == 0) {
-            libarp_set_error("Root fs node type is not valid (must be regular file, directory, or link)");
+            arp_set_error("Root fs node type is not valid (must be regular file, directory, or link)");
             return -1;
         } else {
             return 0;
@@ -422,14 +422,14 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     if (win32_path_len == 0 || win32_path_len > MAX_PATH) {
         _free_fs_node(node);
 
-        libarp_set_error("Failed to get full file path");
+        arp_set_error("Failed to get full file path");
         return -1;
     }
 
     if ((node->target_path = malloc(win32_path_len)) == NULL) {
         _free_fs_node(node);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -440,7 +440,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     if ((node->target_path = realpath(root_path, NULL)) == NULL) {
         _free_fs_node(node);
 
-        libarp_set_error("realpath failed");
+        arp_set_error("realpath failed");
         return errno;
     }
 
@@ -452,7 +452,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
     if ((path_copy = strdup(root_path)) == NULL) {
         _free_fs_node(node);
 
-        libarp_set_error("strdup failed");
+        arp_set_error("strdup failed");
         return ENOMEM;
     }
 
@@ -465,7 +465,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         free(path_copy);
         _free_fs_node(node);
 
-        libarp_set_error("basename failed");
+        arp_set_error("basename failed");
         return -1;
     }
     #endif
@@ -503,7 +503,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         free(path_copy);
         _free_fs_node(node);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -516,7 +516,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
             free(path_copy);
             _free_fs_node(node);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return ENOMEM;
         }
 
@@ -543,7 +543,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         if ((node->media_type = malloc(media_type_len_b)) == NULL) {
             _free_fs_node(node);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return ENOMEM;
         }
 
@@ -572,7 +572,7 @@ static size_t _fs_node_count(fs_node_ptr root, bool dirs_only) {
 
         for (size_t i = 0; i < root->children_count; i++) {
             if (count == SIZE_MAX) {
-                libarp_set_error("Too many fs nodes to count");
+                arp_set_error("Too many fs nodes to count");
                 return count;
             }
 
@@ -644,7 +644,7 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
 
     fs_node_ptr_arr node_arr = NULL;
     if ((node_arr = malloc(sizeof(void*) *total_count)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -677,10 +677,10 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part
 
     if (fs_root->type == FS_NODE_TYPE_FILE || fs_root->type == FS_NODE_TYPE_LINK) {
         if (sizes->node_count == UINT32_MAX) {
-            libarp_set_error("Too many nodes to pack");
+            arp_set_error("Too many nodes to pack");
             return E2BIG;
         } else if (sizes->resource_count == UINT32_MAX) {
-            libarp_set_error("Too many resources to pack");
+            arp_set_error("Too many resources to pack");
             return E2BIG;
         }
         
@@ -698,14 +698,14 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part
         sizes->cat_len += NODE_DESC_BASE_LEN + stem_len_s + ext_len_s + media_type_len_s;
 
         if (max_part_len != 0 && fs_root->size > max_part_len) {
-            libarp_set_error("Max part size is smaller than largest resource");
+            arp_set_error("Max part size is smaller than largest resource");
             return EINVAL;
         }
 
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + fs_root->size;
         if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
-                libarp_set_error("Part count would exceed maximum");
+                arp_set_error("Part count would exceed maximum");
                 return EINVAL;
             }
 
@@ -718,10 +718,10 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part
         sizes->resource_count += 1;
     } else if (fs_root->type == FS_NODE_TYPE_DIR) {
         if (sizes->node_count == UINT32_MAX) {
-            libarp_set_error("Too many nodes to pack");
+            arp_set_error("Too many nodes to pack");
             return E2BIG;
         } else if (sizes->directory_count == UINT32_MAX) {
-            libarp_set_error("Too many directories to pack");
+            arp_set_error("Too many directories to pack");
             return E2BIG;
         }
 
@@ -731,13 +731,13 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part
         size_t new_len = sizes->body_lens[sizes->part_count - 1] + node_len;
 
         if (max_part_len != 0 && node_len > max_part_len) {
-            libarp_set_error("Max part size is not large enough to store largest directory");
+            arp_set_error("Max part size is not large enough to store largest directory");
             return EINVAL;
         }
 
         if (max_part_len != 0 && new_len > max_part_len) {
             if (sizes->part_count == PACKAGE_MAX_PARTS) {
-                libarp_set_error("Part count would exceed maximum");
+                arp_set_error("Part count would exceed maximum");
                 return -1;
             }
         }
@@ -758,7 +758,7 @@ static int _compute_important_sizes(const_fs_node_ptr fs_root, uint64_t max_part
             }
         }
     } else {
-        libarp_set_error("Unknown fs node type");
+        arp_set_error("Unknown fs node type");
         return -1;
     }
 
@@ -773,7 +773,7 @@ static char *_get_part_path(const char *target_dir, const char *pack_name, uint1
     }
 
     if (skip_suffix && index != 1) {
-        libarp_set_error("Suffix cannot be skipped for part with index > 1");
+        arp_set_error("Suffix cannot be skipped for part with index > 1");
         return NULL;
     }
 
@@ -845,7 +845,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
     if ((cur_part_file = fopen(cur_part_path, "wb")) == NULL) {
         free(cur_part_path);
-        libarp_set_error("Failed to open first part file on disk");
+        arp_set_error("Failed to open first part file on disk");
         return -1;
     }
 
@@ -858,7 +858,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
         unlink(cur_part_path);
         free(cur_part_path);
 
-        libarp_set_error("Failed to seek to body offset");
+        arp_set_error("Failed to seek to body offset");
         return errno;
     }
 
@@ -888,7 +888,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index - 1, false);
 
-                libarp_set_error("Failed to open part file for writing on disk");
+                arp_set_error("Failed to open part file for writing on disk");
                 return -1;
             }
 
@@ -905,7 +905,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 free(cur_part_path);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, false);
 
-                libarp_set_error("Failed to write part header to disk");
+                arp_set_error("Failed to write part header to disk");
                 return -1;
             }
 
@@ -943,7 +943,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                         free(cur_part_path);
                         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-                        libarp_set_error("Failed to write directory contents to part file on disk");
+                        arp_set_error("Failed to write directory contents to part file on disk");
                         return -1;
                     }
 
@@ -967,7 +967,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                     free(cur_part_path);
                     _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-                    libarp_set_error("Failed to write directory contents to part file on disk");
+                    arp_set_error("Failed to write directory contents to part file on disk");
                     return -1;
                 }
 
@@ -991,7 +991,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat node at path %s", node->target_path);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return -1;
             }
 
@@ -1003,7 +1003,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Node changed sizes at path %s", node->target_path);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return -1;
             }
 
@@ -1014,7 +1014,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to read node at path %s", node->target_path);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return -1;
             }
 
@@ -1041,7 +1041,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 if (read_bytes > remaining) {
                     free(cur_part_path);
 
-                    libarp_set_error("File size changed while reading");
+                    arp_set_error("File size changed while reading");
                     return -1;
                 }
 
@@ -1077,7 +1077,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                     free(cur_part_path);
                     _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-                    libarp_set_error("Failed to copy node data to part file on disk");
+                    arp_set_error("Failed to copy node data to part file on disk");
                     return -1;
                 }
 
@@ -1104,7 +1104,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Encountered error while reading node at path %s", node->target_path);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return -1;
             }
 
@@ -1132,7 +1132,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             free(cur_part_path);
             _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-            libarp_set_error("Failed to open first part file on disk");
+            arp_set_error("Failed to open first part file on disk");
             return -1;
         }
     }
@@ -1147,7 +1147,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
     if (fseek(cur_part_file, 0, SEEK_SET) != 0) {
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-        libarp_set_error("Failed to seek to file start");
+        arp_set_error("Failed to seek to file start");
         return errno;
     }
 
@@ -1155,14 +1155,14 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
     if (fwrite(pack_header, PACKAGE_HEADER_LEN, 1, cur_part_file) != 1) {
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-        libarp_set_error("Failed to write package header to disk");
+        arp_set_error("Failed to write package header to disk");
         return -1;
     }
 
     if (sizes->cat_off > LONG_MAX || fseek(first_part_file, (long) sizes->cat_off, SEEK_SET) != 0) {
         _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-        libarp_set_error("Failed to seek to catalogue offset");
+        arp_set_error("Failed to seek to catalogue offset");
         return errno;
     }
 
@@ -1175,7 +1175,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 fclose(first_part_file);
                 _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-                libarp_set_error("Failed to write catalogue to disk");
+                arp_set_error("Failed to write catalogue to disk");
                 return -1;
             }
 
@@ -1270,7 +1270,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             fclose(first_part_file);
             _unlink_part_files(target_dir, opts->pack_name, cur_part_index, skip_part_suffix);
 
-            libarp_set_error("Failed to write catalogue to disk");
+            arp_set_error("Failed to write catalogue to disk");
             return -1;
         }
     }
@@ -1292,32 +1292,32 @@ static bool validate_src_path(const char *src_path) {
         printf("src_path: %s\n", src_path);
         switch (errno) {
             case EACCES: {
-                libarp_set_error("Cannot access source path");
+                arp_set_error("Cannot access source path");
                 return false;
             }
             case ENAMETOOLONG: {
-                libarp_set_error("Source path is too long");
+                arp_set_error("Source path is too long");
                 return false;
             }
             case ENOENT: {
-                libarp_set_error("Source path does not exist");
+                arp_set_error("Source path does not exist");
                 return false;
             }
             case ENOTDIR: {
-                libarp_set_error("A component of the source path is not a directory");
+                arp_set_error("A component of the source path is not a directory");
                 return false;
             }
             default: {
                 char err_msg[ERR_MSG_MAX_LEN];
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to validate source directory (rc: %d)", errno);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return false;
             }
         }
     }
 
     if (!S_ISDIR(src_stat.st_mode)) {
-        libarp_set_error("Source path is not a directory");
+        arp_set_error("Source path is not a directory");
         return false;
     }
 
@@ -1331,31 +1331,31 @@ static bool validate_output_path(const char *output_path) {
             if (mkdir(output_path, PERM_MASK_RWX_RX_RX) != 0) {
                 switch (errno) {
                     case EACCES: {
-                        libarp_set_error("Cannot access output path prefix");
+                        arp_set_error("Cannot access output path prefix");
                         return false;
                     }
                     case ENAMETOOLONG: {
-                        libarp_set_error("Output path is too long");
+                        arp_set_error("Output path is too long");
                         return false;
                     }
                     case ENOENT: {
-                        libarp_set_error("Output path prefix does not exist");
+                        arp_set_error("Output path prefix does not exist");
                         return false;
                     }
                     case ENOSPC: {
-                        libarp_set_error("Filesystem containing output path prefix is full");
+                        arp_set_error("Filesystem containing output path prefix is full");
                         return false;
                     }
                     case ENOTDIR: {
-                        libarp_set_error("Output path prefix contains a non-directory");
+                        arp_set_error("Output path prefix contains a non-directory");
                         return false;
                     }
                     case EROFS: {
-                        libarp_set_error("Output path prefix is on read-only filesystem");
+                        arp_set_error("Output path prefix is on read-only filesystem");
                         return false;
                     }
                     default: {
-                        libarp_set_error("Failed to create output path");
+                        arp_set_error("Failed to create output path");
                         return false;
                     }
                 }
@@ -1363,31 +1363,31 @@ static bool validate_output_path(const char *output_path) {
         } else {
             switch (errno) {
                 case EACCES: {
-                    libarp_set_error("Cannot access source path");
+                    arp_set_error("Cannot access source path");
                     return false;
                 }
                 case ENAMETOOLONG: {
-                    libarp_set_error("Output path is too long");
+                    arp_set_error("Output path is too long");
                     return false;
                 }
                 case ENOENT: {
-                    libarp_set_error("Output path does not exist");
+                    arp_set_error("Output path does not exist");
                     return false;
                 }
                 case ENOTDIR: {
-                    libarp_set_error("A component of the source path is not a directory");
+                    arp_set_error("A component of the source path is not a directory");
                     return false;
                 }
                 default: {
                     char err_msg[ERR_MSG_MAX_LEN];
                     snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to validate source directory (rc: %d)", errno);
-                    libarp_set_error(err_msg);
+                    arp_set_error(err_msg);
                     return false;
                 }
             }
         }
     } else if (!S_ISDIR(output_stat.st_mode)) {
-        libarp_set_error("Output path is not a directory");
+        arp_set_error("Output path is not a directory");
         return false;
     }
 
@@ -1400,7 +1400,7 @@ int arp_pack_from_fs(const char *src_path, const char *output_dir, ArpPackingOpt
 
     char *real_src_path = NULL;
     if ((real_src_path = malloc(strlen(src_path) + 1)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 

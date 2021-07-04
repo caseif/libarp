@@ -66,7 +66,7 @@ int validate_path_component(const char *cmpnt, uint8_t len_s) {
                 uint16_t cp = ((c & 0x1F) << 6) | (cmpnt[i + 1] & 0x3F);
 
                 if (cp >= 0x80 && cp <= 0x9F) {
-                    libarp_set_error("Path component must not contain control characters");
+                    arp_set_error("Path component must not contain control characters");
                     return -1;
                 }
 
@@ -80,7 +80,7 @@ int validate_path_component(const char *cmpnt, uint8_t len_s) {
                 i += 3;
             } else {
                 // note that this most definitely does not catch all cases of illegal UTF-8
-                libarp_set_error("Path component is not legal UTF-8");
+                arp_set_error("Path component is not legal UTF-8");
                 return -1;
             }
             
@@ -89,12 +89,12 @@ int validate_path_component(const char *cmpnt, uint8_t len_s) {
 
         // we're guaranteed to be working with an ASCII character at this point
         if (c <= 0x1F || c == 0x7F) {
-            libarp_set_error("Path component must not contain control characters");
+            arp_set_error("Path component must not contain control characters");
             return -1;
         }
 
         if (c == '/' || c == '\\' || c == ':') {
-            libarp_set_error("Path component must not contain reserved characters");
+            arp_set_error("Path component must not contain reserved characters");
             return -1;
         }
     }

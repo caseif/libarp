@@ -46,7 +46,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
                 fclose(part_file);
             }
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return ENOMEM;
         }
     }
@@ -78,7 +78,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
                 fclose(part_file);
             }
 
-            libarp_set_error("Failed to read from part file");
+            arp_set_error("Failed to read from part file");
             return -1;
         }
 
@@ -118,7 +118,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
         
         if (out_file != NULL) {
             if (fwrite(unpacked_chunk, unpacked_chunk_len, 1, out_file) != 1) {
-                libarp_set_error("Failed to write resource data to disk");
+                arp_set_error("Failed to write resource data to disk");
                 return errno;
             }
         } else {
@@ -146,7 +146,7 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
             free(unpacked_data);
         }
 
-        libarp_set_error("CRC mismatch");
+        arp_set_error("CRC mismatch");
         return -1;
     }
 

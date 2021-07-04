@@ -17,7 +17,7 @@ static int _package_cmp_fn(const arp_package_t *a, const arp_package_t *b) {
 ArpPackageSet arp_create_set(void) {
     arp_package_set_t *set = NULL;
     if ((set = malloc(sizeof(arp_package_set_t))) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }
@@ -25,7 +25,7 @@ ArpPackageSet arp_create_set(void) {
     if (bt_create(INITIAL_SET_CAP, &set->tree) == NULL) {
         free(set);
 
-        libarp_set_error("Failed to create binary tree");
+        arp_set_error("Failed to create binary tree");
         return NULL;
     }
 
@@ -35,7 +35,7 @@ ArpPackageSet arp_create_set(void) {
 int arp_add_to_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
     if (!bt_insert_distinct(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn)) {
-        libarp_set_error("Set contains package with identical namespace");
+        arp_set_error("Set contains package with identical namespace");
         return -1;
     }
 

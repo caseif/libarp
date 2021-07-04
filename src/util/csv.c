@@ -91,7 +91,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
 
     void *tree_data = NULL;
     if ((tree_data = malloc(total_len)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 
@@ -139,7 +139,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
     if (line_count == 0) {
         free(tree_data);
 
-        libarp_set_error("No media type mappings are present");
+        arp_set_error("No media type mappings are present");
         return NULL;
     }
 
@@ -148,7 +148,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
         bt_free(&csv->tree);
         free(tree_data);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 

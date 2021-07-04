@@ -41,7 +41,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
             new_dir_path = strdup(cur_dir);
         } else {
             if ((new_dir_path = malloc(new_dir_path_len_b)) == NULL) {
-                libarp_set_error("malloc failed");
+                arp_set_error("malloc failed");
                 return ENOMEM;
             }
 
@@ -56,7 +56,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
                     char err_msg[ERR_MSG_MAX_LEN];
                     snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to create directory (rc: %d)", errno);
-                    libarp_set_error(err_msg);
+                    arp_set_error(err_msg);
                     return errno;
                 }
             } else {
@@ -64,7 +64,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
                 char err_msg[ERR_MSG_MAX_LEN];
                 snprintf(err_msg, ERR_MSG_MAX_LEN, "Failed to stat directory (rc: %d)", errno);
-                libarp_set_error(err_msg);
+                arp_set_error(err_msg);
                 return errno;
             }
         }
@@ -85,7 +85,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
         return 0;
     } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
         if (node->part_index == 0 || node->part_index > pack->total_parts) {
-            libarp_set_error("Node part index is invalid");
+            arp_set_error("Node part index is invalid");
             return -1;
         }
 
@@ -120,7 +120,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
                 fclose(cur_part);
             }
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return ENOMEM;
         }
 
@@ -134,7 +134,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
                 fclose(cur_part);
             }
 
-            libarp_set_error("Failed to open output file for resource");
+            arp_set_error("Failed to open output file for resource");
             return errno;
         }
 
@@ -157,7 +157,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
 
         return 0;
     } else {
-        libarp_set_error("Encountered invalid node type");
+        arp_set_error("Encountered invalid node type");
         return EINVAL;
     }
 }
@@ -166,7 +166,7 @@ int arp_unpack_to_fs(ConstArpPackage package, const char *target_dir) {
     const arp_package_t *real_pack = (const arp_package_t*) package;
 
     if (real_pack->node_count == 0) {
-        libarp_set_error("Package does not contain any nodes");
+        arp_set_error("Package does not contain any nodes");
         return -1;
     }
 

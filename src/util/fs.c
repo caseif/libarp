@@ -40,7 +40,7 @@ typedef struct DirHandleStruct {
 DirHandle open_directory(const char *path) {
     dir_handle_t *handle = NULL;
     if ((handle = malloc(sizeof(dir_handle_t))) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 
@@ -48,14 +48,14 @@ DirHandle open_directory(const char *path) {
     char *new_path = NULL;
     size_t new_path_len_b = strlen(path) + 3;
     if (new_path_len_b < strlen(path)) {
-        libarp_set_error("Path too long");
+        arp_set_error("Path too long");
         return NULL;
     }
 
     if ((new_path = malloc(new_path_len_b)) == NULL) {
         free(handle);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
     strncpy(new_path, path, new_path_len_b);
@@ -73,7 +73,7 @@ DirHandle open_directory(const char *path) {
     if ((handle->dir = opendir(path)) == NULL) {
         free(handle);
 
-        libarp_set_error("Failed to open directory");
+        arp_set_error("Failed to open directory");
         return NULL;
     }
     #endif
@@ -89,7 +89,7 @@ const char *read_directory(DirHandle dir) {
         if ((real_dir->find_handle = FindFirstFile(real_dir->path, &real_dir->find_data)) == INVALID_HANDLE_VALUE) {
             if (GetLastError() != ERROR_FILE_NOT_FOUND) {
                 errno = GetLastError();
-                libarp_set_error("FindFirstFile failed");
+                arp_set_error("FindFirstFile failed");
             }
             return NULL;
         }
@@ -134,13 +134,13 @@ void close_directory(DirHandle dir) {
     // why does this return 0 on failure -_-
     if (FindClose(real_dir->find_handle) == 0) {
         errno = GetLastError();
-        libarp_set_error("Failed to close directory");
+        arp_set_error("Failed to close directory");
     }
     #else
     int rc = UNINIT_U32;
     if ((rc = closedir(real_dir->dir)) != 0) {
         errno = rc;
-        libarp_set_error("Failed to close directory");
+        arp_set_error("Failed to close directory");
     }
     #endif
 

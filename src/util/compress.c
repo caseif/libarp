@@ -38,7 +38,7 @@ typedef struct DeflateStream {
 DeflateStream compress_deflate_begin(uint64_t total_input_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 
@@ -52,7 +52,7 @@ DeflateStream compress_deflate_begin(uint64_t total_input_bytes) {
     if (rc != Z_OK) {
         free(stream);
 
-        libarp_set_error("zlib: deflateInit failed");
+        arp_set_error("zlib: deflateInit failed");
         errno = rc;
         return NULL;
     }
@@ -72,7 +72,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
 
     void *output_buf = NULL;
     if ((output_buf = malloc(output_buf_len)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -112,7 +112,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
                 if ((output_buf_new = realloc(output_buf, output_buf_len)) == NULL) {
                     free(output_buf);
 
-                    libarp_set_error("realloc failed");
+                    arp_set_error("realloc failed");
                     return ENOMEM;
                 }
 
@@ -148,7 +148,7 @@ void compress_deflate_end(DeflateStream stream) {
 DeflateStream decompress_deflate_begin(uint64_t total_input_bytes, const uint64_t total_output_bytes) {
     deflate_stream_t *stream = NULL;
     if ((stream = malloc(sizeof(deflate_stream_t))) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 
@@ -167,7 +167,7 @@ DeflateStream decompress_deflate_begin(uint64_t total_input_bytes, const uint64_
         free(stream);
 
         errno = rc;
-        libarp_set_error("zlib: inflateInit failed");
+        arp_set_error("zlib: inflateInit failed");
         return NULL;
     }
 
@@ -186,7 +186,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
     size_t output_buf_len = in_data_len * 2;
     void *output_buf = NULL;
     if ((output_buf = malloc(output_buf_len)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -216,7 +216,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                     if (remaining > 0) {
                         free(output_buf);
 
-                        libarp_set_error("Encountered premature end of DEFLATE stream");
+                        arp_set_error("Encountered premature end of DEFLATE stream");
                         return -1;
                     }
                     at_end = true;
@@ -228,7 +228,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                 default:
                     free(output_buf);
 
-                    libarp_set_error("zlib: Inflate failed");
+                    arp_set_error("zlib: Inflate failed");
                     return rc;
             }
 
@@ -238,7 +238,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                     && total_out_bytes + out_bytes > real_stream->total_output_bytes) {
                 free(output_buf);
 
-                libarp_set_error("Decompressed data exceeds expected length");
+                arp_set_error("Decompressed data exceeds expected length");
                 return -1;
             }
 
@@ -248,7 +248,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
                 if ((output_buf_new = realloc(output_buf, output_buf_len)) == NULL) {
                     free(output_buf);
 
-                    libarp_set_error("realloc failed");
+                    arp_set_error("realloc failed");
                     return ENOMEM;
                 }
 
@@ -270,7 +270,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
             && real_stream->processed_bytes == real_stream->total_output_bytes && !at_end) {
         free(output_buf);
 
-        libarp_set_error("DEFLATE stream is incomplete");
+        arp_set_error("DEFLATE stream is incomplete");
         return -1;
     }
 

@@ -21,11 +21,11 @@
 
 char err_msg[ERR_MSG_MAX_LEN];
 
-const char *libarp_get_error(void) {
+const char *arp_get_error(void) {
     return err_msg;
 }
 
-void libarp_real_set_error(const char *msg, const char *file, int line) {
+void arp_real_set_error(const char *msg, const char *file, int line) {
     size_t msg_len = strlen(msg);
 
     if (msg_len > sizeof(err_msg) - 1) {

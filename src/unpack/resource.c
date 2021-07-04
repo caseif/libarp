@@ -27,7 +27,7 @@ arp_resource_t *arp_load_resource(arp_resource_meta_t *meta) {
     if ((res = malloc(sizeof(arp_resource_t))) == NULL) {
         free(res_data);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         errno = ENOMEM;
         return NULL;
     }

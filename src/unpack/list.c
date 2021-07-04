@@ -16,7 +16,7 @@ static int _list_node_contents(node_desc_t *node, const char *pack_ns, const cha
 static int _list_node_contents(node_desc_t *node, const char *pack_ns, const char *running_path,
         arp_resource_listing_t *listing_arr, size_t *cur_off) {
     if (*cur_off == SIZE_MAX) {
-        libarp_set_error("Too many nodes");
+        arp_set_error("Too many nodes");
         return -1;
     }
 
@@ -27,7 +27,7 @@ static int _list_node_contents(node_desc_t *node, const char *pack_ns, const cha
 
         char *buf = NULL;
         if ((buf = malloc(path_len_b)) == NULL) {
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return ENOMEM;
         }
 
@@ -79,7 +79,7 @@ static int _list_node_contents(node_desc_t *node, const char *pack_ns, const cha
                             free(base_running_path);
                         }
 
-                        libarp_set_error("malloc failed");
+                        arp_set_error("malloc failed");
                         return ENOMEM;
                     }
 
@@ -107,7 +107,7 @@ static int _list_node_contents(node_desc_t *node, const char *pack_ns, const cha
 
         return 0;
     } else {
-        libarp_set_error("Unrecognized node type");
+        arp_set_error("Unrecognized node type");
         return -1;
     }
 }
@@ -117,26 +117,26 @@ int arp_get_resource_listing(ConstArpPackage package, arp_resource_listing_t **l
     *count_out = 0;
 
     if (package == NULL) {
-        libarp_set_error("Package cannot be null");
+        arp_set_error("Package cannot be null");
         return -1;
     }
 
     const arp_package_t *real_pack = (const arp_package_t*) package;
 
     if (real_pack->resource_count == 0) {
-        libarp_set_error("Package contains no resources");
+        arp_set_error("Package contains no resources");
         return -1;
     }
 
     node_desc_t *root_node = real_pack->all_nodes[0];
     if (root_node->type != PACK_NODE_TYPE_DIRECTORY) {
-        libarp_set_error("Root package node is not a directory");
+        arp_set_error("Root package node is not a directory");
         return -1;
     }
 
     arp_resource_listing_t *listing_arr = NULL;
     if ((listing_arr = calloc(real_pack->resource_count, sizeof(arp_resource_listing_t))) == NULL) {
-        libarp_set_error("calloc failed");
+        arp_set_error("calloc failed");
         return ENOMEM;
     }
 

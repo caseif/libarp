@@ -50,7 +50,7 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
         tmp[str_len_s] = '\0';
 
         if ((*target = malloc(str_len_b)) == NULL) {
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return -1;
         }
         memcpy(*target, tmp, str_len_b);
@@ -63,14 +63,14 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
 
 static int _parse_package_header(arp_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
     if (memcmp(header_data, FORMAT_MAGIC, PACKAGE_MAGIC_LEN) != 0) {
-        libarp_set_error("Package magic is incorrect");
+        arp_set_error("Package magic is incorrect");
         return -1;
     }
 
     _copy_int_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, PACKAGE_VERSION_OFF);
 
     if (pack->major_version != 1) {
-        libarp_set_error("Package version is not supported");
+        arp_set_error("Package version is not supported");
         return -1;
     }
 
@@ -91,7 +91,7 @@ static int _parse_package_header(arp_package_t *pack, const unsigned char header
 static int _validate_package_header(const arp_package_t *pack, const uint64_t pack_size) {
     if (pack->compression_type[0] != '\0'
             && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
-        libarp_set_error("Package compression type is not supported");
+        arp_set_error("Package compression type is not supported");
         return EINVAL;
     }
 
@@ -101,52 +101,52 @@ static int _validate_package_header(const arp_package_t *pack, const uint64_t pa
     }
 
     if (pack->total_parts < 1 || pack->total_parts > PACKAGE_MAX_PARTS) {
-        libarp_set_error("Package part count is invalid");
+        arp_set_error("Package part count is invalid");
         return EINVAL;
     }
 
     if (pack->node_count == 0) {
-        libarp_set_error("Package catalogue is empty");
+        arp_set_error("Package catalogue is empty");
         return EINVAL;
     }
 
     if (pack->resource_count == 0) {
-        libarp_set_error("Package does not contain any resources");
+        arp_set_error("Package does not contain any resources");
         return EINVAL;
     }
 
     if (pack->cat_off < PACKAGE_HEADER_LEN) {
-        libarp_set_error("Package catalogue offset is too small");
+        arp_set_error("Package catalogue offset is too small");
         return EINVAL;
     }
 
     if (pack->body_off < PACKAGE_HEADER_LEN) {
-        libarp_set_error("Package body offset is too small");
+        arp_set_error("Package body offset is too small");
         return EINVAL;
     }
 
     if (pack->cat_off + pack->cat_len > pack_size) {
-        libarp_set_error("Package catalogue offset and length are incorrect");
+        arp_set_error("Package catalogue offset and length are incorrect");
         return EINVAL;
     }
 
     if (pack->body_off + pack->body_len > pack_size) {
-        libarp_set_error("Package body offset and length are incorrect");
+        arp_set_error("Package body offset and length are incorrect");
         return EINVAL;
     }
 
     if (pack->cat_off < pack->body_off && pack->cat_off + pack->cat_len > pack->body_off) {
-        libarp_set_error("Package catalogue would overlap body section");
+        arp_set_error("Package catalogue would overlap body section");
         return EINVAL;
     } else if (pack->body_off < pack->cat_off && pack->body_off + pack->body_len > pack->cat_off) {
-        libarp_set_error("Body section would overlap package catalogue");
+        arp_set_error("Body section would overlap package catalogue");
         return EINVAL;
     }
 
     if (pack->cat_off > SIZE_MAX || pack->cat_len > SIZE_MAX
             || pack->body_off > SIZE_MAX || pack->body_len > SIZE_MAX) {
         //TODO: work around this at some point
-        libarp_set_error("Package is too large to load on a 32-bit architecture");
+        arp_set_error("Package is too large to load on a 32-bit architecture");
         return E2BIG;
     }
 
@@ -163,7 +163,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     if (real_path == NULL) {
         free(real_path);
 
-        libarp_set_error("Failed to get absolute path of package file");
+        arp_set_error("Failed to get absolute path of package file");
         return -1;
     }
 
@@ -193,7 +193,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     if (memcmp(file_base + file_base_len_s - strlen("." PACKAGE_EXT), "." PACKAGE_EXT, sizeof("." PACKAGE_EXT)) != 0) {
         free(real_path);
 
-        libarp_set_error("Unexpected file extension for primary package file");
+        arp_set_error("Unexpected file extension for primary package file");
         return -1;
     }
 
@@ -203,7 +203,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     if ((file_stem = malloc(stem_len_b)) == NULL) {
         free(real_path);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return -1;
     }
     memcpy(file_stem, file_base, stem_len_s);
@@ -219,7 +219,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
             free(file_stem);
             free(real_path);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return -1;
         }
         memcpy(parent_dir, real_path, parent_dir_len_s);
@@ -231,7 +231,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
             free(file_stem);
             free(real_path);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return -1;
         }
         parent_dir[parent_dir_len_b - 1] = '\0';
@@ -248,7 +248,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
             free(file_stem);
             free(real_path);
 
-            libarp_set_error("realloc failed");
+            arp_set_error("realloc failed");
             return -1;
         }
         file_stem = file_stem_new;
@@ -261,7 +261,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         free(file_stem);
         free(real_path);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return -1;
     }
 
@@ -282,7 +282,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         size_t part_path_len_b = part_path_len_s + 1;
 
         if ((part_path = malloc(part_path_len_b)) == NULL) {
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
 
             part_err = true;
             break;
@@ -293,7 +293,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if ((pack->part_paths[i - 1] = malloc(part_path_len_b)) == NULL) {
             free(part_path);
 
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
 
             part_err = true;
             break;
@@ -305,7 +305,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if (stat(part_path, &part_stat) != 0) {
             free(part_path);
 
-            libarp_set_error("Failed to stat part file");
+            arp_set_error("Failed to stat part file");
 
             rc = errno;
             part_err = true;
@@ -315,7 +315,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if (!S_ISREG(part_stat.st_mode)) {
             free(part_path);
 
-            libarp_set_error("Part file must be regular file or symlink to regular file");
+            arp_set_error("Part file must be regular file or symlink to regular file");
 
             rc = EINVAL;
             part_err = EINVAL;
@@ -325,7 +325,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         if (part_stat.st_size < PACKAGE_PART_HEADER_LEN) {
             free(part_path);
 
-            libarp_set_error("Package part file is too small");
+            arp_set_error("Package part file is too small");
             
             rc = EINVAL;
             part_err = true;
@@ -339,13 +339,13 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
 
         if (part_file == NULL) {
             if (errno == ENOENT) {
-                libarp_set_error("Part file for package is missing");
+                arp_set_error("Part file for package is missing");
             } else if (errno == EPERM) {
-                libarp_set_error("Cannot access part file for package");
+                arp_set_error("Cannot access part file for package");
             } else if (errno == EIO) {
-                libarp_set_error("I/O error occurred while accessing part file for package");
+                arp_set_error("I/O error occurred while accessing part file for package");
             } else {
-                libarp_set_error("Error occurred accesing part file for package");
+                arp_set_error("Error occurred accesing part file for package");
             }
             
             part_err = true;
@@ -360,7 +360,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
             }
             fclose(part_file);
 
-            libarp_set_error("Failed to read package part header");
+            arp_set_error("Failed to read package part header");
             
             part_err = true;
             break;
@@ -369,7 +369,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         fclose(part_file);
 
         if (memcmp(part_header, PART_MAGIC, PART_MAGIC_LEN) != 0) {
-            libarp_set_error("Package part magic is invalid");
+            arp_set_error("Package part magic is invalid");
             
             rc = EINVAL;
             part_err = true;
@@ -379,7 +379,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
         uint16_t part_index = 0;
         copy_int_as_le(&part_index, offset_ptr(part_header, PART_INDEX_OFF), PART_INDEX_LEN);
         if (part_index != i) {
-            libarp_set_error("Package part index is incorrect");
+            arp_set_error("Package part index is incorrect");
             
             rc = EINVAL;
             part_err = true;
@@ -395,7 +395,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
 
 static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_view) {
     if ((pack->all_nodes = calloc(1, pack->node_count * sizeof(void*))) == NULL) {
-        libarp_set_error("calloc failed");
+        arp_set_error("calloc failed");
         return -1;
     }
 
@@ -406,38 +406,38 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
     uint32_t real_resource_count = 0;
     for (size_t i = 0; i < pack->node_count; i++) {
         if (pack->cat_len - node_start < ND_LEN_LEN) {
-            libarp_set_error("Catalogue underflow");
+            arp_set_error("Catalogue underflow");
 
             return -1;
         }
 
         if (real_node_count > UINT32_MAX) {
-            libarp_set_error("Package contains too many nodes");
+            arp_set_error("Package contains too many nodes");
             return E2BIG;
         }
         
         real_node_count += 1;
         if (real_node_count > pack->node_count) {
-            libarp_set_error("Actual node count mismatches header field");
+            arp_set_error("Actual node count mismatches header field");
         }
 
         uint16_t node_desc_len = 0;
         _copy_int_to_field(&node_desc_len, catalogue, ND_LEN_LEN, node_start + ND_LEN_OFF);
 
         if (node_desc_len < NODE_DESC_BASE_LEN) {
-            libarp_set_error("Node descriptor is too small");
+            arp_set_error("Node descriptor is too small");
             return -1;
         } else if (node_desc_len > NODE_DESC_MAX_LEN) {
-            libarp_set_error("Node descriptor is too large");
+            arp_set_error("Node descriptor is too large");
             return -1;
         } else if (pack->cat_len - node_start < node_desc_len) {
-            libarp_set_error("Catalogue underflow");
+            arp_set_error("Catalogue underflow");
             return -1;
         }
 
         node_desc_t *node = NULL;
         if ((node = malloc(sizeof(node_desc_t))) == NULL) {
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return -1;
         }
 
@@ -461,17 +461,17 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
         _copy_int_to_field(&node->media_type_len_s, catalogue, ND_MT_LEN_LEN, node_start + ND_MT_LEN_OFF);
 
         if (NODE_DESC_BASE_LEN + node->name_len_s + node->media_type_len_s > node_desc_len) {
-            libarp_set_error("Variable string lengths mismatch descriptor length");
+            arp_set_error("Variable string lengths mismatch descriptor length");
             return -1;
         }
 
         if (i == 0 && node->name_len_s > 0) {
-            libarp_set_error("Root node name must be empty string");
+            arp_set_error("Root node name must be empty string");
             return -1;
         }
 
         if (node->type == PACK_NODE_TYPE_DIRECTORY && node->media_type_len_s > 0) {
-            libarp_set_error("Directory nodes may not have media types");
+            arp_set_error("Directory nodes may not have media types");
             return -1;
         }
 
@@ -488,28 +488,28 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
         validate_path_component(node->name, node->name_len_s);
 
         if (node->type != PACK_NODE_TYPE_RESOURCE && node->type != PACK_NODE_TYPE_DIRECTORY) {
-            libarp_set_error("Invalid node type");
+            arp_set_error("Invalid node type");
             return -1;
         }
 
         if (node->type == PACK_NODE_TYPE_DIRECTORY) {
             if (node->part_index != 1) {
-                libarp_set_error("Directory node content must be in primary part");
+                arp_set_error("Directory node content must be in primary part");
                 return -1;
             }
 
             if ((node->packed_data_len % 4) != 0) {
-                libarp_set_error("Directory content length must be divisible by 4");
+                arp_set_error("Directory content length must be divisible by 4");
                 return -1;
             }
 
             if (node->unpacked_data_len > DIRECTORY_CONTENT_MAX_LEN) {
-                libarp_set_error("Directory contains too many files");
+                arp_set_error("Directory contains too many files");
                 return -1;
             }
         } else if (node->type == PACK_NODE_TYPE_RESOURCE) {
             if (real_resource_count > UINT32_MAX) {
-                libarp_set_error("Package contains too many resources");
+                arp_set_error("Package contains too many resources");
                 return E2BIG;
             }
 
@@ -518,12 +518,12 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
     }
 
     if (real_node_count != pack->node_count) {
-        libarp_set_error("Actual node count mismatches header field");
+        arp_set_error("Actual node count mismatches header field");
         return -1;
     }
 
     if (real_resource_count != pack->resource_count) {
-        libarp_set_error("Actual resource count mismatches header field");
+        arp_set_error("Actual resource count mismatches header field");
         return -1;
     }
 
@@ -539,7 +539,7 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
         uint64_t child_count = node->packed_data_len / 4;
 
         if (child_count >= SIZE_MAX) {
-            libarp_set_error("Too many directory children to store in binary tree");
+            arp_set_error("Too many directory children to store in binary tree");
             return E2BIG;
         }
 
@@ -553,7 +553,7 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
             uint32_t child_index = node_children[j];
 
             if (child_index == 0 || child_index >= pack->node_count) {
-                libarp_set_error("Illegal node index in directory");
+                arp_set_error("Illegal node index in directory");
                 return EINVAL;
             }
 
@@ -578,26 +578,26 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
 int arp_load_from_file(const char *path, ArpPackage *package) {
     stat_t package_file_stat;
     if (stat(path, &package_file_stat) != 0) {
-        libarp_set_error("Failed to stat package file");
+        arp_set_error("Failed to stat package file");
         return EINVAL;
     }
 
     if (!S_ISREG(package_file_stat.st_mode)) {
-        libarp_set_error("Source path must point to regular file or symlink to regular file");
+        arp_set_error("Source path must point to regular file or symlink to regular file");
         return EINVAL;
     }
 
     size_t package_file_size = package_file_stat.st_size;
 
     if (package_file_size < PACKAGE_HEADER_LEN) {
-        libarp_set_error("File is too small to contain package header");
+        arp_set_error("File is too small to contain package header");
         return -1;
     }
 
     FILE *package_file = fopen(path, "r");
 
     if (package_file == NULL) {
-        libarp_set_error("Failed to open package file");
+        arp_set_error("Failed to open package file");
         return -1;
     }
 
@@ -607,7 +607,7 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
     if (fread(pack_header, PACKAGE_HEADER_LEN, 1, package_file) != 1) {
         fclose(package_file);
 
-        libarp_set_error("Failed to read package header from file");
+        arp_set_error("Failed to read package header from file");
         return -1;
     }
 
@@ -615,35 +615,35 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
     if ((pack = calloc(1, sizeof(arp_package_t))) == NULL) {
         fclose(package_file);
 
-        libarp_set_error("calloc failed");
+        arp_set_error("calloc failed");
         return -1;
     }
 
     int rc = UNINIT_U32;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
         return rc;
     }
 
     if ((rc = _validate_package_header(pack, package_file_size)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
         return rc;
     }
 
     if ((pack->part_paths = calloc(pack->total_parts, sizeof(void*))) == NULL) {
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
-        libarp_set_error("calloc failed");
+        arp_set_error("calloc failed");
         return -1;
     }
 
     if ((rc = _verify_parts_exist(pack, path)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
         return rc;
@@ -657,19 +657,19 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
             package_file_size >> 32, package_file_size & 0xFFFFFFFF, NULL);
 
     if (file_mapping == NULL) {
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
-        libarp_set_error("Failed to memory-map package file\n");
+        arp_set_error("Failed to memory-map package file\n");
         return GetLastError();
     }
 
     if ((pack_data_view = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, package_file_size)) == NULL) {
         CloseHandle(file_mapping);
-        unload_package(pack);
+        arp_unload(pack);
         fclose(package_file);
 
-        libarp_set_error("Failed to map view of package file\n");
+        arp_set_error("Failed to map view of package file\n");
         return GetLastError();
     }
     #else
@@ -691,7 +691,7 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
     fclose(package_file);
 
     if (rc != 0) {
-        unload_package(pack);
+        arp_unload(pack);
 
         return rc;
     }
@@ -702,7 +702,7 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
 
 int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package) {
     if (package_len < PACKAGE_HEADER_LEN) {
-        libarp_set_error("Package is too small to contain package header");
+        arp_set_error("Package is too small to contain package header");
         return -1;
     }
 
@@ -717,25 +717,25 @@ int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPacka
 
     int rc = UNINIT_U32;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
         return rc;
     }
 
     if ((rc = _validate_package_header(pack, package_len)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
         return rc;
     }
 
     if ((rc = _parse_package_catalogue(pack, data)) != 0) {
-        unload_package(pack);
+        arp_unload(pack);
 
         return rc;
     }
 
     if (pack->total_parts > 1) {
-        unload_package(pack);
+        arp_unload(pack);
 
-        libarp_set_error("Memory-resident packages may not contain more than 1 part");
+        arp_set_error("Memory-resident packages may not contain more than 1 part");
         return -1;
     }
 
@@ -808,7 +808,7 @@ int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resourc
 
     char *path_copy = NULL;
     if ((path_copy = malloc(path_len_s + 1)) == NULL) {
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return ENOMEM;
     }
 
@@ -820,7 +820,7 @@ int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resourc
     if ((needle = strchr(path_tail, ARP_NAMESPACE_DELIMITER)) == NULL) {
         free(path_copy);
 
-        libarp_set_error("Path must contain a namespace");
+        arp_set_error("Path must contain a namespace");
         return EINVAL;
     }
 
@@ -832,7 +832,7 @@ int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resourc
             || strncmp(path_tail, real_pack->package_namespace, MIN(namespace_len_s, PACKAGE_NAMESPACE_LEN)) != 0) {
         free(path_copy);
 
-        libarp_set_error("Namespace does not match package");
+        arp_set_error("Namespace does not match package");
         return EINVAL;
     }
 
@@ -850,7 +850,7 @@ int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resourc
         if (node == NULL) {
             free(path_copy);
 
-            libarp_set_error("Resource does not exist at the specified path");
+            arp_set_error("Resource does not exist at the specified path");
             return ENOENT;
         }
 
@@ -862,14 +862,14 @@ int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resourc
     if (node == NULL) {
         free(path_copy);
 
-        libarp_set_error("Resource does not exist at the specified path");
+        arp_set_error("Resource does not exist at the specified path");
         return ENOENT;
     }
 
     free(path_copy);
 
     if (node->type == PACK_NODE_TYPE_DIRECTORY) {
-        libarp_set_error("Requested path points to directory");
+        arp_set_error("Requested path points to directory");
         return EISDIR;
     }
 

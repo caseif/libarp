@@ -20,22 +20,22 @@
 
 stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack_t *storage) {
     if (el_len == 0) {
-        libarp_set_error("Element length must not be 0");
+        arp_set_error("Element length must not be 0");
         return NULL;
     }
 
     if (cap_increment == 0) {
-        libarp_set_error("Capacity increment must not be 0");
+        arp_set_error("Capacity increment must not be 0");
         return NULL;
     }
 
     if (cap_max == 0) {
-        libarp_set_error("Max capacity must not be 0");
+        arp_set_error("Max capacity must not be 0");
         return NULL;
     }
 
     if ((cap_max % cap_increment) != 0) {
-        libarp_set_error("Max capacity must be multiple of capacity increment");
+        arp_set_error("Max capacity must be multiple of capacity increment");
         return NULL;
     }
 
@@ -45,7 +45,7 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack
         stack->malloced = false;
     } else {
         if ((stack = (stack_t*) malloc(sizeof(stack_t))) == NULL) {
-            libarp_set_error("malloc failed");
+            arp_set_error("malloc failed");
             return NULL;
         }
         stack->malloced = true;
@@ -54,7 +54,7 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack
     if ((stack->data = malloc(el_len * cap_increment)) == NULL) {
         free(stack);
 
-        libarp_set_error("malloc failed");
+        arp_set_error("malloc failed");
         return NULL;
     }
 
@@ -77,13 +77,13 @@ void stack_free(stack_t *stack) {
 int stack_push(stack_t *stack, void *data) {
     if (stack->index == stack->capacity) {
         if (stack->capacity == stack->cap_max) {
-            libarp_set_error("Stack exceeded max capacity");
+            arp_set_error("Stack exceeded max capacity");
             return -1;
         }
 
         void *new_data = NULL;
         if ((new_data = realloc(stack->data, (stack->capacity + stack->cap_increment) * stack->el_len)) == NULL) {
-            libarp_set_error("realloc failed");
+            arp_set_error("realloc failed");
             return ENOMEM;
         }
         stack->data = new_data;
