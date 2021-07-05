@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-const extension_mapping_t *arp_get_extension_mappings(size_t *count) {
+extension_mapping_t *arp_get_extension_mappings(size_t *count) {
     csv_file_t *csv = parse_csv(MEDIA_TYPES_CSV_SRC, MEDIA_TYPES_CSV_LEN, NULL, 0);
 
     if (csv->tree.count == 0) {
