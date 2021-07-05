@@ -21,6 +21,7 @@ const extension_mapping_t *arp_get_extension_mappings(size_t *count) {
 
     size_t i = 0;
     void **csv_line_ptr = NULL;
+    bt_reset_iterator(&csv->tree);
     while ((csv_line_ptr = bt_iterate(&csv->tree)) != NULL) {
         char *csv_line = (char*) *csv_line_ptr;
         size_t line_len = strlen(csv_line);
