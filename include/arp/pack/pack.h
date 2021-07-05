@@ -9,6 +9,9 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 
@@ -23,3 +26,7 @@ void arp_free_packing_options(ArpPackingOptions opts);
 
 int arp_pack_from_fs(const char *src_path, const char *target_dir, ArpPackingOptions opts,
         void (*msg_callback)(const char*));
+
+#ifdef __cplusplus
+}
+#endif

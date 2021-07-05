@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "internal/defines/package.h"
 
 #include <stddef.h>
@@ -12,3 +16,7 @@ typedef struct ExtensionMapping {
 const extension_mapping_t *arp_get_extension_mappings(size_t *count);
 
 void arp_free_extension_mappings(extension_mapping_t *mappings);
+
+#ifdef __cplusplus
+}
+#endif

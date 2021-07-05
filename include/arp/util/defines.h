@@ -9,6 +9,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ARP_NAMESPACE_MAX 0x30
 
 #define ARP_COMPRESS_TYPE_DEFLATE "deflate"
@@ -17,3 +21,7 @@
 #define ARP_PATH_DELIMITER '/'
 
 extern int make_iso_compilers_happy;
+
+#ifdef __cplusplus
+}
+#endif

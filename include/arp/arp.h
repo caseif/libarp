@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "pack/pack.h"
 #include "unpack/list.h"
 #include "unpack/load.h"
@@ -11,3 +15,7 @@
 #include "util/error.h"
 
 extern int make_iso_compilers_happy;
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 typedef void *ArpPackage;
@@ -17,3 +21,7 @@ typedef struct ArpResourceMeta {
 
     void *extra;
 } arp_resource_meta_t;
+
+#ifdef __cplusplus
+}
+#endif

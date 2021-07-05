@@ -9,6 +9,14 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ERR_MSG_MAX_LEN 4096
 
 const char *arp_get_error(void);
+
+#ifdef __cplusplus
+}
+#endif

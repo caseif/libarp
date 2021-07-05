@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "arp/unpack/types.h"
 
 typedef struct ArpResource {
@@ -14,3 +18,7 @@ int arp_find_resource_in_set(ConstArpPackage package, const char *path, arp_reso
 arp_resource_t *arp_load_resource(arp_resource_meta_t *meta);
 
 void arp_unload_resource(arp_resource_t *resource);
+
+#ifdef __cplusplus
+}
+#endif
