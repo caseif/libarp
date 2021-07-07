@@ -4,15 +4,16 @@
 extern "C" {
 #endif
 
-#include "pack/pack.h"
-#include "unpack/list.h"
-#include "unpack/load.h"
-#include "unpack/resource.h"
-#include "unpack/stream.h"
-#include "unpack/types.h"
-#include "unpack/unpack.h"
-#include "util/defines.h"
-#include "util/error.h"
+#include "arp/pack/pack.h"
+#include "arp/unpack/list.h"
+#include "arp/unpack/load.h"
+#include "arp/unpack/resource.h"
+#include "arp/unpack/stream.h"
+#include "arp/unpack/types.h"
+#include "arp/unpack/unpack.h"
+#include "arp/util/defines.h"
+#include "arp/util/error.h"
+#include "arp/util/media_types.h"
 
 extern int make_iso_compilers_happy;
 
