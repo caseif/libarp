@@ -13,7 +13,7 @@ typedef struct ArpResource {
 
 int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta);
 
-int arp_find_resource_in_set(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta);
+int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resource_meta_t *out_meta);
 
 arp_resource_t *arp_load_resource(arp_resource_meta_t *meta);
 

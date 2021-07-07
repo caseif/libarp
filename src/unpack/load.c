@@ -564,17 +564,6 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
     return 0;
 }
 
-static int _cmp_node_names(const void *a, const void *b) {
-    node_desc_t *real_a = (node_desc_t*) a;
-    node_desc_t *real_b = (node_desc_t*) b;
-    return strncmp(real_a->name, real_b->name, MIN(real_a->name_len_s, real_b->name_len_s));
-}
-
-static int _cmp_node_name_to_needle(const void *name, const void *node) {
-    node_desc_t *real_node = (node_desc_t*) node;
-    return strncmp(name, real_node->name, real_node->name_len_s);
-}
-
 int arp_load_from_file(const char *path, ArpPackage *package) {
     stat_t package_file_stat;
     if (stat(path, &package_file_stat) != 0) {
@@ -798,91 +787,5 @@ int arp_unload(ArpPackage package) {
     }
 
     free(package);
-    return 0;
-}
-
-int arp_get_resource_meta(ConstArpPackage package, const char *path, arp_resource_meta_t *out_meta) {
-        const arp_package_t *real_pack = (const arp_package_t*) package;
-
-    size_t path_len_s = strlen(path);
-
-    char *path_copy = NULL;
-    if ((path_copy = malloc(path_len_s + 1)) == NULL) {
-        arp_set_error("malloc failed");
-        return ENOMEM;
-    }
-
-    memcpy(path_copy, path, path_len_s + 1);
-    char *path_tail = path_copy;
-    size_t cursor = 0;
-    char *needle = NULL;
-
-    if ((needle = strchr(path_tail, ARP_NAMESPACE_DELIMITER)) == NULL) {
-        free(path_copy);
-
-        arp_set_error("Path must contain a namespace");
-        return EINVAL;
-    }
-
-    cursor = needle - path_tail;
-
-    size_t namespace_len_s = cursor;
-    path_tail[cursor] = '\0';
-    if (strlen(real_pack->package_namespace) != namespace_len_s
-            || strncmp(path_tail, real_pack->package_namespace, MIN(namespace_len_s, PACKAGE_NAMESPACE_LEN)) != 0) {
-        free(path_copy);
-
-        arp_set_error("Namespace does not match package");
-        return EINVAL;
-    }
-
-    path_tail += cursor + 1;
-
-    // start at root
-    node_desc_t *node = real_pack->all_nodes[0];
-
-    while ((needle = strchr(path_tail, ARP_PATH_DELIMITER)) != NULL) {
-        cursor = needle - path_tail;
-
-        path_tail[cursor] = '\0';
-
-        node = bt_find(&node->children_tree, path_tail, _cmp_node_names);
-        if (node == NULL) {
-            free(path_copy);
-
-            arp_set_error("Resource does not exist at the specified path");
-            return ENOENT;
-        }
-
-        path_tail += cursor + 1;
-    }
-
-    // should be at terminal component now
-    node = bt_find(&node->children_tree, path_tail, _cmp_node_name_to_needle);
-    if (node == NULL) {
-        free(path_copy);
-
-        arp_set_error("Resource does not exist at the specified path");
-        return ENOENT;
-    }
-
-    free(path_copy);
-
-    if (node->type == PACK_NODE_TYPE_DIRECTORY) {
-        arp_set_error("Requested path points to directory");
-        return EISDIR;
-    }
-
-    arp_resource_meta_t meta;
-
-    meta.package = node->package;
-    meta.base_name = node->name;
-    meta.extension = node->ext;
-    meta.media_type = node->media_type;
-    meta.size = node->unpacked_data_len;
-    meta.extra = node;
-
-    memcpy(out_meta, &meta, sizeof(arp_resource_meta_t));
-
     return 0;
 }
