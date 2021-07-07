@@ -124,6 +124,9 @@ int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resou
         return -1;
     }
 
+    size_t ns_len = delim - path;
+    memcpy(path_ns, path, ns_len);
+
     arp_package_t *pack = bt_find(&real_set->tree, path_ns, _cmp_package_ns_to_needle);
 
     if (pack == NULL) {
