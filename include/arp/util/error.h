@@ -15,6 +15,8 @@ extern "C" {
 
 #define ERR_MSG_MAX_LEN 4096
 
+#define E_ARP_RESOURCE_NOT_FOUND 1024
+
 const char *arp_get_error(void);
 
 #ifdef __cplusplus

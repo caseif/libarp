@@ -1,6 +1,7 @@
 #include "arp/unpack/resource.h"
 #include "arp/unpack/types.h"
 #include "arp/util/defines.h"
+#include "arp/util/error.h"
 #include "internal/unpack/types.h"
 #include "internal/unpack/unpack_util.h"
 #include "internal/util/common.h"
@@ -77,7 +78,7 @@ int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_me
             free(path_copy);
 
             arp_set_error("Resource does not exist at the specified path");
-            return ENOENT;
+            return E_ARP_RESOURCE_NOT_FOUND;
         }
 
         path_tail += cursor + 1;
@@ -89,7 +90,7 @@ int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_me
         free(path_copy);
 
         arp_set_error("Resource does not exist at the specified path");
-        return ENOENT;
+        return E_ARP_RESOURCE_NOT_FOUND;
     }
 
     free(path_copy);
@@ -127,7 +128,7 @@ int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resou
 
     if (pack == NULL) {
         arp_set_error("Resource does not exist at the specified path");
-        return -1;
+        return E_ARP_RESOURCE_NOT_FOUND;
     }
 
     return arp_find_resource(pack, path, out_meta);
