@@ -36,13 +36,11 @@ void arp_real_set_error(const char *msg, const char *file, int line) {
 
     #ifdef LIBARP_DEBUG
     fprintf(stderr, "%s:%d: [libarp] %s\n", file, line, err_msg);
-    #endif
 
-    #ifdef LIBARP_DEBUG
     #ifdef _WIN32
-    __debugbreak();
+    //__debugbreak();
     #else
-    raise(SIGTRAP);
+    //raise(SIGTRAP);
     #endif
     #else
     fprintf(stderr, "[libarp] %s\n", err_msg);
