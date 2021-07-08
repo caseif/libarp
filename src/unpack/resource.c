@@ -12,12 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int _cmp_node_names(const void *a, const void *b) {
-    node_desc_t *real_a = (node_desc_t*) a;
-    node_desc_t *real_b = (node_desc_t*) b;
-    return strncmp(real_a->name, real_b->name, MIN(real_a->name_len_s, real_b->name_len_s));
-}
-
 static int _cmp_node_name_to_needle(const void *name, const void *node) {
     node_desc_t *real_node = (node_desc_t*) node;
     return strncmp(name, real_node->name, real_node->name_len_s);
@@ -73,7 +67,7 @@ int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_me
 
         path_tail[cursor] = '\0';
 
-        node = bt_find(&node->children_tree, path_tail, _cmp_node_names);
+        node = bt_find(&node->children_tree, path_tail, _cmp_node_name_to_needle);
         if (node == NULL) {
             free(path_copy);
 
