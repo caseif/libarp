@@ -14,7 +14,7 @@
 
 static int _cmp_node_name_to_needle(const void *name, const void *node) {
     node_desc_t *real_node = (node_desc_t*) node;
-    return strncmp(name, real_node->name, real_node->name_len_s);
+    return strncmp(name, real_node->name, real_node->name_len_s + 1);
 }
 
 static int _cmp_package_ns_to_needle(const void *name, const void *pack) {
@@ -120,6 +120,7 @@ int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resou
 
     size_t ns_len = delim - path;
     memcpy(path_ns, path, ns_len);
+    path_ns[ns_len] = '\0';
 
     arp_package_t *pack = bt_find(&real_set->tree, path_ns, _cmp_package_ns_to_needle);
 

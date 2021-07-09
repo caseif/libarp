@@ -36,7 +36,7 @@ static void _copy_str_to_field(void *dst, const void *src, const size_t dst_len,
 }
 
 static int _compare_node_names(const node_desc_t *a, const node_desc_t *b) {
-    return memcmp(a->name, b->name, MIN(a->name_len_s, b->name_len_s));
+    return strncmp(a->name, b->name, MIN(a->name_len_s + 1, b->name_len_s + 1));
 }
 
 static int _read_var_string(const void *catalogue, size_t off, char **target, size_t str_len_s) {
