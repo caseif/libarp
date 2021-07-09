@@ -84,10 +84,6 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
 
         remaining -= to_read;
 
-        if (part == NULL) {
-            fclose(part_file);
-        }
-
         if (began_crc) {
             real_crc = crc32c_cont(real_crc, read_buf, to_read);
         } else {
@@ -130,6 +126,10 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
         if (unpacked_chunk != read_buf) {
             free(unpacked_chunk);
         }
+    }
+
+    if (part == NULL) {
+        fclose(part_file);
     }
 
     if (CMPR_ANY(pack->compression_type)) {
