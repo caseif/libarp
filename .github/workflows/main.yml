@@ -8,8 +8,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: submodule checkout
-      run: git submodule update --init --recursive
+      with:
+        token: ${{secrets.ACCESS_TOKEN}}
+        submodules: recursive
     - name: configure
       run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
     - name: build
@@ -25,9 +26,10 @@ jobs:
     runs-on: windows-2016
 
     steps:
-    - uses: actions/checkout@v1
-    - name: submodule checkout
-      run: git submodule update --init --recursive
+    - uses: actions/checkout@v2
+      with:
+        token: ${{secrets.ACCESS_TOKEN}}
+        submodules: recursive
     - name: configure
       run: mkdir build && cd build && cmake -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Debug ..
     - name: build
