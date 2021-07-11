@@ -101,14 +101,14 @@ endif()
 # then we generate the actual source files
 file(MAKE_DIRECTORY "${GENERATED_SRC_DIR}")
 file(MAKE_DIRECTORY "${GENERATED_INC_DIR}")
-execute_process(COMMAND "ruby" "${TOOLING_DIR}/bin2c/bin2c.rb"
+execute_process(COMMAND "ruby" "${TOOLING_DIR}/abacus/abacus.rb"
       "${TOOLING_DIR}/output/media_types.csv"
       "-h ${GENERATED_INC_DIR}/"
       "-c ${GENERATED_SRC_DIR}/"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     RESULT_VARIABLE CMD_RES)
 if(CMD_RES)
-  message(FATAL_ERROR "    bin2c.rb: ${CMD_RES}")
+  message(FATAL_ERROR "    abacus.rb: ${CMD_RES}")
 endif()
 
 # source files
