@@ -1,6 +1,6 @@
 [submodule "libs/zlib"]
 	path = libs/zlib
-	url = https://github.com/madler/zlib.git
+	url = git@github.com:madler/zlib.git
 [submodule "tooling/abacus"]
 	path = tooling/abacus
-	url = https://github.com/caseif/Abacus.git
+	url = git@github.com:caseif/Abacus.git
