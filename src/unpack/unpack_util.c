@@ -16,13 +16,63 @@
 
 #define IO_BUFFER_LEN (128 * 1024) // 128 KB
 
-int unpack_node_data(const node_desc_t *node, FILE *out_file,
-        void **out_data, size_t *out_data_len, FILE *part) {
-    assert((out_data != NULL) ^ (out_file != NULL)); // only one can be supplied
+static int _unpack_node_from_memory(arp_package_t *pack, const node_desc_t *node,
+        void **out_data, size_t *out_data_len, bool *out_malloced) {
+    if (node->part_index != 1) {
+        arp_set_error("In-memory node has invalid part index");
+        return EINVAL;
+    }
 
-    int rc = UNINIT_U32;
+    void *unpacked_data;
+    size_t unpacked_len;
 
-    arp_package_t *pack = node->package;
+    void *node_ptr = (void*) ((uintptr_t) pack->in_mem_body + node->data_off);
+
+    uint32_t crc = crc32c(node_ptr, node->packed_data_len);
+
+    if (crc != node->crc) {
+        arp_set_error("CRC mismatch");
+        return -1;
+    }
+
+    bool malloced = false;
+
+    if (CMPR_ANY(pack->compression_type)) {
+        if (CMPR_DEFLATE(pack->compression_type)) {
+            DeflateStream defl_stream = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len);
+            malloced = true;
+
+            if (defl_stream == NULL) {
+                return errno;
+            }
+
+            int rc = UNINIT_U32;
+            if ((rc = decompress_deflate(defl_stream, node_ptr, node->packed_data_len, &unpacked_data, &unpacked_len))
+                    != 0) {
+                return rc;
+            }
+
+            decompress_deflate_end(defl_stream);
+        } else {
+            assert(0);
+        }
+    } else {
+        unpacked_data = node_ptr;
+        unpacked_len = node->unpacked_data_len;
+    }
+
+    *out_data = unpacked_data;
+    *out_data_len = unpacked_len;
+    *out_malloced = malloced;
+
+    return 0;
+}
+
+static int _unpack_node_from_file(arp_package_t *pack, const node_desc_t *node, FILE *out_file,
+        void **out_data, size_t *out_data_len, bool *out_malloced, FILE *part) {
+        int rc = UNINIT_U32;
+
+    void *unpacked_data = NULL;
 
     FILE *part_file = NULL;
     if (part != NULL) {
@@ -36,8 +86,9 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
             return errno;
         }
     }
-    
-    void *unpacked_data = NULL;
+
+    bool malloced = false;
+
     size_t unpacked_data_len = node->unpacked_data_len;
     if (out_data != NULL) {
         if ((unpacked_data = malloc(unpacked_data_len)) == NULL) {
@@ -49,12 +100,16 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
             arp_set_error("malloc failed");
             return ENOMEM;
         }
+
+        malloced = true;
     }
 
     void *compress_data = NULL;
     if (CMPR_ANY(pack->compression_type)) {
         if (CMPR_DEFLATE(pack->compression_type)) {
-            compress_data = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len);
+            if ((compress_data = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len)) == NULL) {
+                return errno;
+            }
         } else {
              // should have already validated by now
             assert(false);
@@ -153,9 +208,30 @@ int unpack_node_data(const node_desc_t *node, FILE *out_file,
     if (out_data != NULL) {
         *out_data = unpacked_data;
     }
+
     if (out_data_len != NULL) {
         *out_data_len = unpacked_data_len;
     }
 
+    *out_malloced = malloced;
+
     return 0;
+}
+
+int unpack_node_data(const node_desc_t *node, FILE *out_file,
+        void **out_data, size_t *out_data_len, bool *out_malloced, FILE *part) {
+    assert((out_data != NULL) ^ (out_file != NULL)); // only one can be supplied
+
+    arp_package_t *pack = node->package;
+
+    if (pack->in_mem_body != NULL) {
+        if (out_file != NULL) {
+            arp_set_error("Unpacking in-memory nodes to disk is not supported");
+            return EINVAL;
+        }
+
+        return _unpack_node_from_memory(pack, node, out_data, out_data_len, out_malloced);
+    } else {
+        return _unpack_node_from_file(pack, node, out_file, out_data, out_data_len, out_malloced, part);
+    }
 }

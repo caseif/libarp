@@ -40,6 +40,7 @@ typedef struct NodeDesc {
 
     uint64_t index;
     void *loaded_data;
+    bool is_data_malloced;
     binary_tree_t children_tree;
 } node_desc_t;
 
@@ -61,6 +62,7 @@ typedef struct ArpPackageStruct {
     uint64_t body_len;
     node_desc_t **all_nodes;
     char **part_paths;
+    const unsigned char *in_mem_body;
 } arp_package_t;
 
 typedef struct ArpResourceStream {

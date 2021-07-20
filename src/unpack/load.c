@@ -608,6 +608,8 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
         return -1;
     }
 
+    pack->in_mem_body = NULL;
+
     int rc = UNINIT_U32;
     if ((rc = _parse_package_header(pack, pack_header)) != 0) {
         arp_unload(pack);
@@ -727,6 +729,8 @@ int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPacka
         arp_set_error("Memory-resident packages may not contain more than 1 part");
         return -1;
     }
+
+    pack->in_mem_body = (const unsigned char *) ((uintptr_t) data + pack->body_off);
 
     *package = pack;
     return 0;

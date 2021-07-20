@@ -141,8 +141,9 @@ arp_resource_t *arp_load_resource(arp_resource_meta_t *meta) {
 
     void *res_data = NULL;
     size_t res_data_len = 0;
+    bool res_malloced = false;
     int rc = 0;
-    if ((rc = unpack_node_data(node, NULL, &res_data, &res_data_len, NULL)) != 0) {
+    if ((rc = unpack_node_data(node, NULL, &res_data, &res_data_len, &res_malloced, NULL)) != 0) {
         errno = rc;
         return NULL;
     }
@@ -166,6 +167,7 @@ arp_resource_t *arp_load_resource(arp_resource_meta_t *meta) {
     res->data = res_data;
 
     node->loaded_data = res;
+    node->is_data_malloced = res_malloced;
 
     return res;
 }
@@ -175,7 +177,9 @@ void arp_unload_resource(arp_resource_t *resource) {
         return;
     }
 
-    if (resource->data != NULL) {
+    node_desc_t *node = (node_desc_t*) resource->meta.extra;
+
+    if (resource->data != NULL && node->is_data_malloced) {
         free(resource->data);
     }
 

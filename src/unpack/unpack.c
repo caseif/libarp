@@ -138,7 +138,7 @@ int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,
             return errno;
         }
 
-        rc = unpack_node_data(node, res_file, NULL, NULL, cur_part);
+        rc = unpack_node_data(node, res_file, NULL, NULL, NULL, cur_part);
 
         fclose(res_file);
 
