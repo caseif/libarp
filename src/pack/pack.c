@@ -417,24 +417,25 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
 
     #ifdef _WIN32
     char win32_path_buffer[MAX_PATH + 1];
-    size_t win32_path_len = GetFullPathName(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
+    size_t win32_path_len_s = GetFullPathName(root_path, MAX_PATH + 1, win32_path_buffer, NULL);
+    size_t win32_path_len_b = win32_path_len_s + 1;
 
-    if (win32_path_len == 0 || win32_path_len > MAX_PATH) {
+    if (win32_path_len_s == 0 || win32_path_len_s > MAX_PATH) {
         _free_fs_node(node);
 
         arp_set_error("Failed to get full file path");
         return -1;
     }
 
-    if ((node->target_path = malloc(win32_path_len)) == NULL) {
+    if ((node->target_path = malloc(win32_path_len_b)) == NULL) {
         _free_fs_node(node);
 
         arp_set_error("malloc failed");
         return ENOMEM;
     }
 
-    memcpy(node->target_path, win32_path_buffer, win32_path_len);
-    node->target_path[win32_path_len] = '\0';
+    memcpy(node->target_path, win32_path_buffer, win32_path_len_s);
+    node->target_path[win32_path_len_b - 1] = '\0';
     #else
     // realpath returns a malloc'd string, so assigning it directly is fine
     if ((node->target_path = realpath(root_path, NULL)) == NULL) {
