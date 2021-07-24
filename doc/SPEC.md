@@ -32,7 +32,10 @@ Version 1.0 (Draft)
 The Argus Resource Package (ARP) format is designed to provide a simple, structured format for packaging static assets
 in a way which is easily and efficiently parsed.
 
-## 2. Definitions
+## 2. Conventions and Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in [RFC 2119][4].
 
 Strictly speaking, the phrase "ARP package" is tautological. However, for the sake of ease of understanding, this shall
 be considered a completely acceptable way of describing a binary structure encoding data in the ARP format, and will be
@@ -95,8 +98,7 @@ The package header describes the meta-attributes of the ARP package. The structu
 | `0x62`| `0x8` | Body Size | The length in bytes of the body section of the first part. |
 | `0x6A` | `0x96` | Reserved | Reserved for future use. |
 
-The package namespace may not contain the characters `/` (forward slash), `\` (back slash), `:` (colon), , nor any
-control characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
+The package namespace is constrained as described in [Section 7](#7-resource-identifiers).
 
 #### 4.3.2. Part Header
 
@@ -132,8 +134,7 @@ Apart from this, parsers are not required to perform any further validation.
 
 The maximum length by design for each a node name and node media type is 255 bytes.
 
-Node names may not contain the characters `/` (forward slash), `\` (back slash), or `:` (colon), nor any control
-characters (`U+0000`&ndash;`U+001F`, `U+007F`&ndash;`U+009F`).
+Node names may not contain any reserved characters as defined by [Section 7](#7-resource-identifiers).
 
 | Offset | Length | Name | Description |
 | --: | --: | :-: | :-- |
@@ -241,30 +242,65 @@ specified by the ARP standard.
 | `.vsh` | `text/x-glsl-vert` |
 | `.vert` | `text/x-glsl-vert` |
 
-## 7. Referencing Resources
+## 7. Resource Identifiers
 
-ARP defines an idiomatic way of referencing resources contained by an ARP package via the ARP path specification. An ARP
-path contains the following components:
+ARP defines an idiomatic way of referencing resources contained by an ARP package via the ARP identifier specification.
 
-- The namespace of the package containing the resource
-- A colon (`:`)
-- The parent directories of the resource beginning from the root, with each followed by a forward-slash (`/`)
-- The base name of the resource
+Note that while similar in appearance, ARP identifiers are **not** URIs. The URI specification requires a scheme, which is
+not provided for by the ARP identifier specification. ARP identifiers instead begin with a namespace, which is **not**
+semantically interchangable.
 
-For example, a package has a namespace of `foo`, a resource in the root called `bar`, and a directory in the root called
-`baz`. The `baz` directory contains a resource called `qux`. The path referencing the resource `bar` is `foo:bar`, and
-the path referencing the resource `qux` is `foo:baz/qux`.
+For the purposes of ARP identifiers and their componenents, the characters `/`, `\`, and `:` are considered reserved.
+The set of characters including all reserved characters along with control characters (including `U+0000`&ndash;`U+001F`
+and `U+007F`&ndash;`U+009F`) are considered illegal. All characters not in the set of illegal characters are considered
+legal.
+
+An ARP identifier is defined by the following ABNF rules (as specified by [RFC 5234][4]):
+
+```abnf
+ARP-identifier  = namespace ":" path
+
+namespace       = 1*( idchar )
+
+path            = path-part *( "/" path-part )
+
+path-part       = 1*( idchar )
+
+idchar          = ALPHA / DIGIT / symchar / cschar
+
+symchar         = %x20-2E / %x3C-40 / %x5B / %x5D-60 / %x7B-7E
+
+cschar          = %xA0-D7FF / %xF900-FDCF / %xFDF0-FFEF
+                / %x10000-1FFFD / %x20000-2FFFD / %x30000-3FFFD
+                / %x40000-4FFFD / %x50000-5FFFD / %x60000-6FFFD
+                / %x70000-7FFFD / %x80000-8FFFD / %x90000-9FFFD
+                / %xA0000-AFFFD / %xB0000-BFFFD / %xC0000-CFFFD
+                / %xD0000-DFFFD / %xE1000-EFFFD
+```
+
+Additionally, the first character of a namespace SHOULD be a letter as defined by the Unicode specification. The ARP
+specification does not restrict usage to any given version of [the Unicode specification][8].
+
+As an example, a package has a namespace of `foo`, a resource in the root called `bar`, and a directory in the root
+called `baz`. The `baz` directory contains a resource called `qux`. The path referencing the resource `bar` is
+`foo:bar`, and the path referencing the resource `qux` is `foo:baz/qux`.
 
 ## 8. External Documentation Referenced
 
 - [IEEE 802.3][1]
 - [RFC 1951][2]
 - [RFC 2045][3]
-- [IANA media types registry][4]
-- [httpd: mime.types][5]
+- [RFC 2119][4]
+- [RFC 5234][5]
+- [IANA media types registry][6]
+- [httpd: mime.types][7]
+- [Unicode][8]
 
 [1]: https://standards.ieee.org/standard/802_3-2018.html (IEEE 802.3)
 [2]: https://tools.ietf.org/html/rfc1951 (RFC 1951)
 [3]: https://tools.ietf.org/html/rfc2045 (RFC 2045)
-[4]: https://www.iana.org/assignments/media-types/media-types.xhtml (IANA media types registry)
-[5]: https://svn.apache.org/repos/asf/!svn/bc/1884192/httpd/httpd/trunk/docs/conf/mime.types (httpd: mime.types)
+[4]: https://tools.ietf.org/html/rfc2119 (RFC 2119)
+[5]: https://tools.ietf.org/html/rfc5234 (RFC 5234)
+[6]: https://www.iana.org/assignments/media-types/media-types.xhtml (IANA media types registry)
+[7]: https://svn.apache.org/repos/asf/!svn/bc/1884192/httpd/httpd/trunk/docs/conf/mime.types (httpd: mime.types)
+[8]: https://www.unicode.org/versions/ (Unicode)
