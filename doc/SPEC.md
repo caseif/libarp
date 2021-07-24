@@ -87,7 +87,7 @@ Subsequent parts SHALL NOT include the package header or directory structures, I
 The package header describes the meta-attributes of the ARP package. The structure is described below.
 
 | Offset | Length | Type | Name | Description |
-| --: | --: | :-: | :-- |
+| --: | --: | :-: | :-: | :-- |
 | `0x0` | `0x8` | byte sequence | Magic | MUST be hex sequence `1B` `41` `52` `47` `55` `53` `52` `50` (`0x1B` `ARGUSRP`). |
 | `0x8` | `0x2` | INTEGER | Version | The format major version the package conforms to. Parsers MUST refuse to parse further if they do not provide explicit support for this major version of the format. |
 | `0xA` | `0x2` | ASCII string | Compression | The type of compression applied to individual resources in the package as a magic ASCII string. The standard possible values are described in the [Magic Values](#5-magic-values) section of this document. |
@@ -107,7 +107,7 @@ The package namespace is constrained as described in [Section 7](#7-resource-ide
 #### 4.3.2. Part Header
 
 | Offset | Length | Type | Name | Description |
-| --: | --: | :-: | :-- |
+| --: | --: | :-: | :-: | :-- |
 | `0x0` | `0x8` | byte sequence | Magic | MUST be hex sequence `1B` `41` `52` `47` `55` `53` `50` `54` (`0x1B` `ARGUSPT`). **This is different from the magic in the primary header.** |
 | `0x8` | `0x2` | INTEGER | Part Number | The index of this part. This MUST be between 2 and 999, inclusive. |
 | `0xA` | `0x6` | (none) | Reserved | Reserved for future use. |
@@ -140,7 +140,7 @@ Node name nor media types SHALL NOT exceed 255 bytes in length.
 Node names MUST NOT contain any reserved characters as defined by [Section 7](#7-resource-identifiers).
 
 | Offset | Length | Type | Name | Description |
-| --: | --: | :-: | :-- |
+| --: | --: | :-: | :-: | :-- |
 | `0x0` | `0x2` | INTEGER | Descriptor length | The length of the node descriptor, including this length field. |
 | `0x2` | `0x1` | INTEGER | Type | The type of the node. `0` for resource, `1` for directory. |
 | `0x3` | `0x2` | INTEGER | Part index | The index of the package part containing the resource data. For directory-type nodes, this MUST be `1`. |
