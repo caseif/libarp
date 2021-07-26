@@ -20,6 +20,8 @@ if(WIN32)
   set(CMAKE_STATIC_LIBRARY_SUFFIX ".lib")
 endif()
 
+set(LIBARP_USER_MAPPINGS "" CACHE STRING "Path to user-supplied media type mappings")
+
 option(LIBARP_FEATURE_PACK "Compile with support for packing data" ON)
 option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
 option(LIBARP_FEATURE_DEFLATE "Compile with support for DEFLATE compression" ON)
@@ -92,7 +94,7 @@ set(GENERATED_INC_DIR "${TEMP_INC_DIR}/internal/generated")
 # generate resource sources
 # first we generate a master media type map
 message("Generating resource sources")
-execute_process(COMMAND "ruby" "${TOOLING_DIR}/generate_mt_mappings.rb"
+execute_process(COMMAND "ruby" "${TOOLING_DIR}/generate_mt_mappings.rb" "${LIBARP_USER_MAPPINGS}"
     WORKING_DIRECTORY "${TOOLING_DIR}"
     RESULT_VARIABLE CMD_RES)
 if(CMD_RES)

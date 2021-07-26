@@ -9,7 +9,7 @@ media types. The following files are used as input, in descending order of prece
 
 | File name | Description | Note |
 | :-- | :-- | :-- |
-| `user_mappings.csv` | A user-provided CSV file mapping file extensions to ARP media types | Each row should contain a single file extension in the first column, and a single ARP media type in the second. |
+| `user_mappings.csv` | A CSV file provided via the command line mapping file extensions to ARP media types | Each row should contain a single file extension in the first column, and a single ARP media type in the second. |
 | `arp_mappings.csv` | A CSV file mappings file extensions to ARP media types | This file's contents are defined by the ARP specification, version 1, [section 6.1][2]. | |
 | `mime.types` | httpd's `mime.types` file as directed by the ARP specification, version 1, [section 6][1] | This file is published by Apache into the public domain and thus is not subject to any other license found in this repository. |
 

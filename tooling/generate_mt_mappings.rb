@@ -37,7 +37,7 @@ def parse_apache(path)
     mappings
 end
 
-def process_input()
+def process_input(user_mapping_path)
     unless File.file? APACHE_MAPPINGS_PATH
         puts "Apache mappings file (mime.types) is missing"
         exit
@@ -51,8 +51,9 @@ def process_input()
 
     # order is important here, highest-precedence mappings go in first
 
-    if File.file? USER_MAPPINGS_PATH
-        user_mappings = parse_csv USER_MAPPINGS_PATH
+    if user_mapping_path and not user_mapping_path.empty?
+        raise "User-supplied mapping path does not exist" unless File.file? user_mapping_path
+        user_mappings = parse_csv user_mapping_path
         mappings = user_mappings.merge mappings
     end
 
@@ -71,10 +72,12 @@ def generate_output(mappings)
     }
 end
 
-def consolidate_mappings()
-    mappings = process_input()
+def consolidate_mappings(user_mapping_path)
+    mappings = process_input(user_mapping_path)
     generate_output(mappings)
     puts "Success, output written to #{File.expand_path OUTPUT_PATH}"
 end
 
-consolidate_mappings()
+user_mapping_path = ARGV.pop
+
+consolidate_mappings(user_mapping_path)
