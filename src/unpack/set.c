@@ -1,3 +1,4 @@
+#include "arp/unpack/load.h"
 #include "arp/unpack/set.h"
 #include "internal/defines/misc.h"
 #include "internal/unpack/types.h"
@@ -45,6 +46,22 @@ int arp_add_to_set(ArpPackageSet set, ArpPackage package) {
 void arp_remove_from_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
     bt_remove(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn);
+}
+
+int arp_unload_set_packages(ArpPackageSet set) {
+    arp_package_set_t *real_set = (arp_package_set_t*) set;
+    
+    int rc = 0;
+    arp_package_t **pack;
+    bt_reset_iterator(&real_set->tree);
+    while ((pack = (arp_package_t**) bt_iterate(&real_set->tree)) != NULL) {
+        int rc_temp = arp_unload(*pack);
+        if (rc_temp != 0) {
+            rc = rc_temp;
+        }
+    }
+
+    return rc;
 }
 
 void arp_destroy_set(ArpPackageSet set) {
