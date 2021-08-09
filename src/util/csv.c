@@ -201,4 +201,5 @@ const char *search_csv(const csv_file_t *csv, const char *key) {
 void free_csv(csv_file_t *csv) {
     bt_free(&csv->tree);
     free(csv->data);
+    free(csv);
 }
