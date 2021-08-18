@@ -43,6 +43,8 @@ void arp_real_set_error(const char *msg, const char *file, int line) {
     //raise(SIGTRAP);
     #endif
     #else
+    (void)(file);
+    (void)(line);
     fprintf(stderr, "[libarp] %s\n", err_msg);
     #endif
 }

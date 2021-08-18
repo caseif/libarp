@@ -23,8 +23,8 @@ static int _unpack_node_from_memory(arp_package_t *pack, const node_desc_t *node
         return EINVAL;
     }
 
-    void *unpacked_data;
-    size_t unpacked_len;
+    void *unpacked_data = NULL;
+    size_t unpacked_len = 0;
 
     void *node_ptr = (void*) ((uintptr_t) pack->in_mem_body + node->data_off);
 
@@ -60,6 +60,8 @@ static int _unpack_node_from_memory(arp_package_t *pack, const node_desc_t *node
         unpacked_data = node_ptr;
         unpacked_len = node->unpacked_data_len;
     }
+
+    assert(unpacked_data != NULL);
 
     *out_data = unpacked_data;
     *out_data_len = unpacked_len;
@@ -108,6 +110,10 @@ static int _unpack_node_from_file(arp_package_t *pack, const node_desc_t *node, 
     if (CMPR_ANY(pack->compression_type)) {
         if (CMPR_DEFLATE(pack->compression_type)) {
             if ((compress_data = decompress_deflate_begin(node->packed_data_len, node->unpacked_data_len)) == NULL) {
+                if (unpacked_data != NULL) {
+                    free(unpacked_data);
+                }
+
                 return errno;
             }
         } else {
@@ -169,10 +175,15 @@ static int _unpack_node_from_file(arp_package_t *pack, const node_desc_t *node, 
         
         if (out_file != NULL) {
             if (fwrite(unpacked_chunk, unpacked_chunk_len, 1, out_file) != 1) {
+                if (unpacked_data != NULL) {
+                    free(unpacked_data);
+                }
+
                 arp_set_error("Failed to write resource data to disk");
                 return errno;
             }
         } else {
+            assert(unpacked_data != NULL);
             memcpy((char*) unpacked_data + written_bytes, unpacked_chunk, unpacked_chunk_len);
         }
 
