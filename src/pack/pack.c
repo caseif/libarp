@@ -1470,7 +1470,6 @@ int arp_pack_from_fs(const char *src_path, const char *output_dir, ArpPackingOpt
     _free_fs_node(fs_tree);
 
     free(fs_flat);
-    free(media_types);
 
     return rc;
 }
