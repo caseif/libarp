@@ -128,6 +128,8 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
         assert(real_stream->zlib_stream.avail_in == 0);
     }
 
+    (void)(rc); // avoid unused warning in release configuration
+
     if (real_stream->processed_bytes == real_stream->total_input_bytes) {
         assert(rc == Z_STREAM_END);
     }
