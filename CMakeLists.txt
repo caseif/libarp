@@ -10,6 +10,8 @@ set(LIBARP_VERSION "${CMAKE_PROJECT_VERSION}${LIBARP_VERSION_SUFFIX}" CACHE STRI
 
 set(LIBRARY_BASE_NAME arp)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 if(WIN32)
   set(CMAKE_SHARED_LIBRARY_PREFIX "")
   set(CMAKE_SHARED_MODULE_PREFIX "")
@@ -199,7 +201,7 @@ if(MSVC)
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations \
-                     -Wconversion -Wno-error=conversion -pedantic -pedantic-errors -std=c11")
+                     -Wconversion -Wno-error=conversion -Wno-error=sign-conversion -pedantic -pedantic-errors")
   if(IS_TARGET_X86)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
   endif()
