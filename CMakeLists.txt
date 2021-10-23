@@ -164,7 +164,11 @@ target_link_libraries("${PROJECT_NAME}_static" "${EXT_LIBS_STATIC}")
 
 # set the C standard
 set_target_properties("${PROJECT_NAME}" PROPERTIES C_STANDARD 11)
+set_target_properties("${PROJECT_NAME}" PROPERTIES C_STANDARD_REQUIRED ON)
+set_target_properties("${PROJECT_NAME}" PROPERTIES C_EXTENSIONS OFF)
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES C_STANDARD 11)
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES C_STANDARD_REQUIRED ON)
+set_target_properties("${PROJECT_NAME}_static" PROPERTIES C_EXTENSIONS OFF)
 # enable PIC
 set_target_properties("${PROJECT_NAME}" PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties("${PROJECT_NAME}_static" PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -207,11 +211,9 @@ else()
   endif()
   if(MINGW)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -ggdb")
-  else()
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
   endif()
 
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
 endif()
 
 # make the copy headers target a dependency to force it to run
