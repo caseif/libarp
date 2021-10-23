@@ -204,6 +204,7 @@ if(MSVC)
   endif()
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
+  add_compile_definitions("_POSIX_C_SOURCE=200809L" "_XOPEN_SOURCE=500")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations \
                      -Wconversion -Wno-error=conversion -Wno-error=sign-conversion -pedantic -pedantic-errors")
   if(IS_TARGET_X86)
