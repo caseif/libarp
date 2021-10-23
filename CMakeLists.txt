@@ -6,7 +6,7 @@ endif()
 project(arp VERSION 1.0.0
             LANGUAGES C)
 
-if("${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" EQUAL "10.0.17763.0")
+if("${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" STREQUAL "10.0.17763.0")
   message(FATAL_ERROR "Compilation against Windows SDK version 10.0.17763 is broken due to a bug in the SDK headers. \
   Please use a different SDK version.")
 endif()
