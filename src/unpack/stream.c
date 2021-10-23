@@ -179,7 +179,7 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
             if (CMPR_DEFLATE(node->package->compression_type)) {
                 #ifdef FEATURE_DEFLATE
                 // include a small buffer space to allow efficient processing of uncompressible data
-                max_to_read *= DEFLATE_BUF_MARGIN;
+                max_to_read = (size_t) (max_to_read * DEFLATE_BUF_MARGIN);
                 #else
                 arp_set_error(DEFLATE_SUPPORT_ERROR);
                 return -1;
@@ -275,7 +275,7 @@ int arp_stream_resource(ArpResourceStream stream, void **out_data, size_t *out_d
     }
 
     // loop back around to 0 if required since we only have 3 buffers
-    real_stream->next_buf = (real_stream->next_buf + 1) % 3;
+    real_stream->next_buf = (unsigned char) (real_stream->next_buf + 1) % 3;
 
     // we don't update the pos fields because we didn't read anything from disk
 

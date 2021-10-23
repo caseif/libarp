@@ -1,10 +1,11 @@
-#include "arp/util/defines.h"
 #include "arp/unpack/load.h"
+#include "arp/util/defines.h"
 #include "internal/defines/file.h"
 #include "internal/defines/misc.h"
 #include "internal/unpack/types.h"
 #include "internal/util/common.h"
 #include "internal/util/error.h"
+#include "internal/util/util.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -96,7 +97,7 @@ static int _validate_package_header(const arp_package_t *pack, const uint64_t pa
     }
 
     if (validate_path_component(pack->package_namespace,
-            MIN(strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN)) != 0) {
+            MIN((uint8_t) strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN)) != 0) {
         return EINVAL;
     }
 
@@ -213,7 +214,7 @@ static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
     size_t parent_dir_len_s = 0;
     size_t parent_dir_len_b = 0;
     if (file_base != real_path) {
-        parent_dir_len_s = file_base - real_path;
+        parent_dir_len_s = SUB_PTRS(file_base, real_path);
         parent_dir_len_b = parent_dir_len_s + 1;
         if ((parent_dir = malloc(parent_dir_len_b)) == NULL) {
             free(file_stem);
@@ -576,7 +577,7 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
         return EINVAL;
     }
 
-    size_t package_file_size = package_file_stat.st_size;
+    size_t package_file_size = (size_t) package_file_stat.st_size;
 
     if (package_file_size < PACKAGE_HEADER_LEN) {
         arp_set_error("File is too small to contain package header");

@@ -3,6 +3,7 @@
 #include "internal/generated/media_types.csv.h"
 #include "internal/util/common.h"
 #include "internal/util/csv.h"
+#include "internal/util/util.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -39,7 +40,7 @@ extension_mapping_t *arp_get_extension_mappings(size_t *count) {
 
         extension_mapping_t *mapping = &mappings[i];
         
-        size_t ext_len = delim - csv_line;
+        size_t ext_len = SUB_PTRS(delim, csv_line);
         size_t mt_len = line_len - ext_len - 1;
 
 

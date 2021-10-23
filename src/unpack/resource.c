@@ -6,6 +6,7 @@
 #include "internal/unpack/unpack_util.h"
 #include "internal/util/common.h"
 #include "internal/util/error.h"
+#include "internal/util/util.h"
 
 #include <errno.h>
 #include <stddef.h>
@@ -45,7 +46,7 @@ int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_me
         return EINVAL;
     }
 
-    cursor = needle - path_tail;
+    cursor = SUB_PTRS(needle, path_tail);
 
     size_t namespace_len_s = cursor;
     path_tail[cursor] = '\0';
@@ -63,7 +64,7 @@ int arp_find_resource(ConstArpPackage package, const char *path, arp_resource_me
     node_desc_t *node = real_pack->all_nodes[0];
 
     while ((needle = strchr(path_tail, ARP_PATH_DELIMITER)) != NULL) {
-        cursor = needle - path_tail;
+        cursor = SUB_PTRS(needle, path_tail);
 
         path_tail[cursor] = '\0';
 
@@ -118,7 +119,7 @@ int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resou
         return -1;
     }
 
-    size_t ns_len = delim - path;
+    size_t ns_len = SUB_PTRS(delim, path);
     memcpy(path_ns, path, ns_len);
     path_ns[ns_len] = '\0';
 

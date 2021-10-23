@@ -148,7 +148,7 @@ static csv_file_t *_load_media_types(arp_packing_options_t *opts) {
             return NULL;
         }
 
-        user_csv_len = user_file_stat.st_size;
+        user_csv_len = (size_t) user_file_stat.st_size;
         if (user_csv_len > USER_MT_FILE_MAX_SIZE) {
             fclose(user_file);
 
@@ -401,7 +401,7 @@ static int _create_fs_tree_impl(const char *root_path, const csv_file_t *media_t
         // symlinks should be transparently resolved
         node->type = FS_NODE_TYPE_FILE;
 
-        node->size = root_stat.st_size;
+        node->size = (size_t) root_stat.st_size;
     } else {
         free(node);
 
@@ -591,10 +591,10 @@ static size_t _fs_node_count(fs_node_ptr root, bool dirs_only) {
 }
 
 // forward declaration required for recursive calls
-static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off,
+static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, uint32_t *dir_off, uint32_t *file_off,
         size_t *node_count);
 
-static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_off, size_t *file_off,
+static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, uint32_t *dir_off, uint32_t *file_off,
         size_t *node_count) {
     if (root == NULL) {
         return 0;
@@ -602,9 +602,14 @@ static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_
 
     // we have two separate offsets because the directories are listed first in a single block
     if (root->type == FS_NODE_TYPE_DIR) {
-        root->index = *dir_off;
+        root->index = (uint32_t) *dir_off;
         node_arr[*dir_off] = root;
         *dir_off += 1;
+        if (*dir_off == 0) {
+            // we wrapped around
+            arp_set_error("Too many directory children to pack");
+            return 0;
+        }
         // We track the node count separately to prove to the static analyzer
         // that the array is being fully populated. We could just use the value
         // in file_off since that will effectively be identical, but LLVM isn't
@@ -617,12 +622,17 @@ static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_
         // separately is still probably a cleaner and less bug-prone way of
         // doing it.
         *node_count += 1;
+        if (*dir_off == 0) {
+            // we wrapped around
+            arp_set_error("Too many directory children to pack");
+            return 0;
+        }
 
         for (size_t i = 0; i < root->children_count; i++) {
             _flatten_dir(root->children[i], node_arr, dir_off, file_off, node_count);
         }
     } else {
-        root->index = *file_off;
+        root->index = (uint32_t) *file_off;
         node_arr[*file_off] = root;
         *file_off += 1;
         *node_count += 1;
@@ -633,6 +643,12 @@ static int _flatten_dir(fs_node_ptr root, fs_node_ptr_arr node_arr, size_t *dir_
 
 static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *node_count) {
     size_t total_count = _fs_node_count(root, false);
+
+    if (total_count > UINT32_MAX) {
+        arp_set_error("Too many items to pack");
+        return E2BIG;
+    }
+
     size_t dir_count = _fs_node_count(root, true);
 
     *node_count = 0;
@@ -651,8 +667,8 @@ static int _flatten_fs(fs_node_ptr root, fs_node_ptr_arr *flattened, size_t *nod
 
     int rc = UNINIT_U32;
 
-    size_t dir_off = 0;
-    size_t file_off = dir_count;
+    uint32_t dir_off = 0;
+    uint32_t file_off = (uint32_t) dir_count;
     if ((rc = _flatten_dir(root, node_arr, &dir_off, &file_off, node_count)) != 0) {
         free(node_arr);
 
@@ -787,10 +803,10 @@ static char *_get_part_path(const char *target_dir, const char *pack_name, uint1
     return buf;
 }
 
-static int _unlink_part_files(const char *target_dir, const char *pack_name, size_t count, bool skip_suffix) {
+static int _unlink_part_files(const char *target_dir, const char *pack_name, uint16_t count, bool skip_suffix) {
     char *cur_path = NULL;
 
-    for (size_t i = 1; i <= count; i++) {
+    for (uint16_t i = 1; i <= count; i++) {
         cur_path = _get_part_path(target_dir, pack_name, i, skip_suffix, cur_path);
         unlink(cur_path);
     }
@@ -929,7 +945,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
             if (node->children_count == 0) {
                 node->packed_data_len = 0;
-                node->crc = ~0;
+                node->crc = (uint32_t) ~0;
             }
 
             size_t dir_data_len = 0;
@@ -996,7 +1012,7 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
                 return -1;
             }
 
-            uint64_t cur_node_size = node_stat.st_size;
+            uint64_t cur_node_size = (uint64_t) node_stat.st_size;
 
             if (cur_node_size != node->size) {
                 fclose(cur_part_file);

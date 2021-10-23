@@ -8,7 +8,7 @@ extern "C" {
 
 #include <stddef.h>
 
-#define ARP_STREAM_EOF 0xDEADDEAD
+#define ARP_STREAM_EOF ((int32_t) 0xDEADDEAD)
 
 typedef void *ArpResourceStream;
 

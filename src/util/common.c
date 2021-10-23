@@ -55,7 +55,7 @@ void copy_int_as_le(void *dst, void *src, size_t len) {
 
 int validate_path_component(const char *cmpnt, uint8_t len_s) {
     for (uint8_t i = 0; i < len_s; i++) {
-        unsigned char c = cmpnt[i];
+        unsigned char c = (unsigned char) cmpnt[i];
         if (c & 0x80) {
             // we can take a shortcut since we only care about specific code points, most of which are in ASCII
             if ((c & 0xE0) == 0xC0) {
@@ -63,7 +63,7 @@ int validate_path_component(const char *cmpnt, uint8_t len_s) {
                     break;
                 }
 
-                uint16_t cp = ((c & 0x1F) << 6) | (cmpnt[i + 1] & 0x3F);
+                uint16_t cp = (uint16_t) (((c & 0x1FU) << 6) | (cmpnt[i + 1] & 0x3F));
 
                 if (cp >= 0x80 && cp <= 0x9F) {
                     arp_set_error("Path component must not contain control characters");

@@ -7,11 +7,12 @@
  * license text may be accessed at https://opensource.org/licenses/MIT.
  */
 
+#include "internal/defines/package.h"
 #include "internal/util/bt.h"
 #include "internal/util/common.h"
 #include "internal/util/csv.h"
 #include "internal/util/error.h"
-#include "internal/defines/package.h"
+#include "internal/util/util.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -26,8 +27,8 @@ static int _csv_insert_cmp(const void *a, const void *b) {
     const char *delim_a = strchr(csv_line_a, ',');
     const char *delim_b = strchr(csv_line_b, ',');
 
-    size_t key_len_a = delim_a - csv_line_a;
-    size_t key_len_b = delim_b - csv_line_b;
+    size_t key_len_a = SUB_PTRS(delim_a, csv_line_a);
+    size_t key_len_b = SUB_PTRS(delim_b, csv_line_b);
 
     assert(key_len_a <= NODE_EXT_MAX_LEN);
     assert(key_len_b <= NODE_EXT_MAX_LEN);
@@ -59,7 +60,7 @@ static int _csv_find_cmp(const void *needle, const void *node_data) {
         return -1;
     }
 
-    size_t key_len = MIN(delim - csv_line, NODE_EXT_MAX_LEN);
+    size_t key_len = MIN(SUB_PTRS(delim, csv_line), NODE_EXT_MAX_LEN);
 
     // copy the key to a buffer so that we can null-terminate it and use strcmp
     char key_buf[NODE_EXT_MAX_LEN + 1];
@@ -119,7 +120,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
             line_len = remaining;
             remaining = 0;
         } else {
-            line_len = line_end - cur;
+            line_len = SUB_PTRS(line_end, cur);
             remaining -= line_len + 1; // account for newline character
 
             // replace the newline with a null terminator

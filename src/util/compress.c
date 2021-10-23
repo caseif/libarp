@@ -85,7 +85,7 @@ int compress_deflate(DeflateStream stream, void *data, size_t data_len, void **o
         size_t to_read = MIN(remaining, sizeof(real_stream->in_buf));
         assert(real_stream->processed_bytes + to_read <= real_stream->total_input_bytes);
         
-        real_stream->zlib_stream.avail_in = to_read;
+        real_stream->zlib_stream.avail_in = (uint32_t) to_read;
         real_stream->zlib_stream.next_in = data_window;
 
         remaining -= to_read;
@@ -199,7 +199,7 @@ int decompress_deflate(DeflateStream stream, void *in_data, size_t in_data_len, 
     while (remaining > 0) {
         size_t to_read = MIN(remaining, sizeof(real_stream->out_buf));
 
-        defl_stream->avail_in = to_read;
+        defl_stream->avail_in = (uint32_t) to_read;
         defl_stream->next_in = (void*) data_window;
 
         remaining -= to_read;
