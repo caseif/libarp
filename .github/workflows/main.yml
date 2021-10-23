@@ -2,7 +2,7 @@ name: libarp
 on: [push, pull_request]
 
 jobs:
-  build-ubuntu:
+  build-ubuntu-gcc:
 
     runs-on: ubuntu-20.04
 
@@ -13,6 +13,29 @@ jobs:
         submodules: recursive
     - name: configure
       run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
+      env:
+        CC: gcc
+    - name: build
+      run: cmake --build build --parallel 8
+    - name: archive
+      uses: actions/upload-artifact@v1
+      with:
+        name: libarp_dist_linux
+        path: build/dist/
+
+  build-ubuntu-clang:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        token: ${{secrets.ACCESS_TOKEN}}
+        submodules: recursive
+    - name: configure
+      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
+      env:
+        CC: clang
     - name: build
       run: cmake --build build --parallel 8
     - name: archive
