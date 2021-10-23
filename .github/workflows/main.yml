@@ -54,7 +54,7 @@ jobs:
         token: ${{secrets.ACCESS_TOKEN}}
         submodules: recursive
     - name: configure
-      run: mkdir build && cd build && cmake -DCMAKE_SYSTEM_VERSION=10.0.19041.0 -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Debug ..
+      run: mkdir build && cd build && cmake -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.19041.0 -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Debug ..
     - name: build
       run: cmake --build build --parallel 8
     - name: archive
