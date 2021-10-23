@@ -71,13 +71,13 @@ int validate_path_component(const char *cmpnt, uint8_t len_s) {
                 }
 
                 // 2-byte character, skip one extra byte
-                i += 1;
+                i += 1U;
             } else if ((c & 0xF0) == 0xE0) {
                 // 3-byte character, skip two extra bytes
-                i += 2;
+                i += 2U;
             } else if ((c & 0xF8) == 0xF0) {
                 // 4-byte character, skip three extra bytes
-                i += 3;
+                i += 3U;
             } else {
                 // note that this most definitely does not catch all cases of illegal UTF-8
                 arp_set_error("Path component is not legal UTF-8");
