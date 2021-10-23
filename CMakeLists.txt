@@ -198,8 +198,8 @@ if(MSVC)
   endif()
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
 else()
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -Wextra -Winit-self -Wuninitialized \
-                     -Wmissing-declarations -Wconversion -pedantic -pedantic-errors -std=c11")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations \
+                     -Wconversion -Wno-error=conversion -pedantic -pedantic-errors -std=c11")
   if(IS_TARGET_X86)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
   endif()
