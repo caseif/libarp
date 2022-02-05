@@ -44,15 +44,6 @@ ArpResourceStream arp_create_resource_stream(arp_resource_meta_t *meta, size_t c
     stream->overflow_cap = 0;
     stream->overflow_buf = NULL;
 
-    size_t res_base_off = 0;
-    if (node->part_index == 1) {
-        res_base_off = node->package->body_off;
-    } else {
-        res_base_off = PACKAGE_PART_HEADER_LEN;
-    }
-
-    res_base_off += node->data_off;
-
     if ((stream->file = open_part_file_for_node(node)) == NULL) {
         free(stream);
 
