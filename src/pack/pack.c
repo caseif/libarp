@@ -1039,7 +1039,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
             bool began_crc = false;
 
             uint64_t packed_data_len = 0;
-            uint64_t raw_data_len = 0;
 
             void *compress_handle = NULL;
 
@@ -1100,7 +1099,6 @@ static int _write_package_contents_to_disk(fs_node_ptr_arr fs_flat, const char *
 
                 cur_body_off += to_write;
                 packed_data_len += to_write;
-                raw_data_len += read_bytes;
 
                 if (remaining == 0) {
                     break;
