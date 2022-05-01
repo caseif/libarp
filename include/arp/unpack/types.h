@@ -4,6 +4,8 @@
 extern "C" {
 #endif
 
+#include "arp/util/defines.h"
+
 #include <stdint.h>
 
 typedef void *ArpPackage;
