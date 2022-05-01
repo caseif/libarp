@@ -20,6 +20,9 @@ extern "C" {
 #define ARP_NAMESPACE_DELIMITER ':'
 #define ARP_PATH_DELIMITER '/'
 
+#define PACKAGE_COMPRESSION_LEN 2
+#define PACKAGE_NAMESPACE_LEN 0x30
+
 extern int make_iso_compilers_happy;
 
 #ifdef __cplusplus
