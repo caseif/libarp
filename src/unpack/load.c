@@ -62,96 +62,115 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
     return 0;
 }
 
-static int _parse_package_header(arp_package_t *pack, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
+static int _parse_package_header(arp_package_meta_t *meta, const unsigned char header_data[PACKAGE_HEADER_LEN]) {
     if (memcmp(header_data, FORMAT_MAGIC, PACKAGE_MAGIC_LEN) != 0) {
         arp_set_error("Package magic is incorrect");
         return -1;
     }
 
-    _copy_int_to_field(&pack->major_version, header_data, PACKAGE_VERSION_LEN, PACKAGE_VERSION_OFF);
+    uint16_t major_version;
+    _copy_str_to_field(&major_version, header_data, PACKAGE_VERSION_LEN, PACKAGE_VERSION_OFF);
 
-    if (pack->major_version != 1) {
+    if (major_version != 1) {
         arp_set_error("Package version is not supported");
         return -1;
     }
 
-    _copy_str_to_field(&pack->compression_type, header_data, PACKAGE_COMPRESSION_LEN, PACKAGE_COMPRESSION_OFF);
-    _copy_str_to_field(&pack->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, PACKAGE_NAMESPACE_OFF);
-    _copy_int_to_field(&pack->total_parts, header_data, PACKAGE_PARTS_LEN, PACKAGE_PARTS_OFF);
-    _copy_int_to_field(&pack->cat_off, header_data, PACKAGE_CAT_OFF_LEN, PACKAGE_CAT_OFF_OFF);
-    _copy_int_to_field(&pack->cat_len, header_data, PACKAGE_CAT_LEN_LEN, PACKAGE_CAT_LEN_OFF);
-    _copy_int_to_field(&pack->node_count, header_data, PACKAGE_CAT_CNT_LEN, PACKAGE_CAT_CNT_OFF);
-    _copy_int_to_field(&pack->directory_count, header_data, PACKAGE_DIR_CNT_LEN, PACKAGE_DIR_CNT_OFF);
-    _copy_int_to_field(&pack->resource_count, header_data, PACKAGE_RES_CNT_LEN, PACKAGE_RES_CNT_OFF);
-    _copy_int_to_field(&pack->body_off, header_data, PACKAGE_BODY_OFF_LEN, PACKAGE_BODY_OFF_OFF);
-    _copy_int_to_field(&pack->body_len, header_data, PACKAGE_BODY_LEN_LEN, PACKAGE_BODY_LEN_OFF);
+    meta->major_version = major_version;
+
+    _copy_str_to_field(&meta->compression_type, header_data, PACKAGE_COMPRESSION_LEN, PACKAGE_COMPRESSION_OFF);
+    meta->compression_type[PACKAGE_COMPRESSION_LEN] = '\0';
+    _copy_str_to_field(&meta->package_namespace, header_data, PACKAGE_NAMESPACE_LEN, PACKAGE_NAMESPACE_OFF);
+    meta->package_namespace[PACKAGE_NAMESPACE_LEN] = '\0';
+    _copy_int_to_field(&meta->total_parts, header_data, PACKAGE_PARTS_LEN, PACKAGE_PARTS_OFF);
+    _copy_int_to_field(&meta->cat_off, header_data, PACKAGE_CAT_OFF_LEN, PACKAGE_CAT_OFF_OFF);
+    _copy_int_to_field(&meta->cat_len, header_data, PACKAGE_CAT_LEN_LEN, PACKAGE_CAT_LEN_OFF);
+    _copy_int_to_field(&meta->node_count, header_data, PACKAGE_CAT_CNT_LEN, PACKAGE_CAT_CNT_OFF);
+    _copy_int_to_field(&meta->directory_count, header_data, PACKAGE_DIR_CNT_LEN, PACKAGE_DIR_CNT_OFF);
+    _copy_int_to_field(&meta->resource_count, header_data, PACKAGE_RES_CNT_LEN, PACKAGE_RES_CNT_OFF);
+    _copy_int_to_field(&meta->body_off, header_data, PACKAGE_BODY_OFF_LEN, PACKAGE_BODY_OFF_OFF);
+    _copy_int_to_field(&meta->body_len, header_data, PACKAGE_BODY_LEN_LEN, PACKAGE_BODY_LEN_OFF);
 
     return 0;
 }
 
-static int _validate_package_header(const arp_package_t *pack, const uint64_t pack_size) {
-    if (pack->compression_type[0] != '\0'
-            && memcmp(pack->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
+static int _validate_package_header(const arp_package_meta_t *meta, const uint64_t pack_size) {
+    if (meta->compression_type[0] != '\0'
+            && memcmp(meta->compression_type, ARP_COMPRESS_MAGIC_DEFLATE, PACKAGE_COMPRESSION_LEN) != 0) {
         arp_set_error("Package compression type is not supported");
         return EINVAL;
     }
 
-    if (validate_path_component(pack->package_namespace,
-            MIN((uint8_t) strlen(pack->package_namespace), PACKAGE_NAMESPACE_LEN)) != 0) {
+    if (validate_path_component(meta->package_namespace,
+            MIN((uint8_t) strlen(meta->package_namespace), PACKAGE_NAMESPACE_LEN)) != 0) {
         return EINVAL;
     }
 
-    if (pack->total_parts < 1 || pack->total_parts > PACKAGE_MAX_PARTS) {
+    if (meta->total_parts < 1 || meta->total_parts > PACKAGE_MAX_PARTS) {
         arp_set_error("Package part count is invalid");
         return EINVAL;
     }
 
-    if (pack->node_count == 0) {
+    if (meta->node_count == 0) {
         arp_set_error("Package catalogue is empty");
         return EINVAL;
     }
 
-    if (pack->resource_count == 0) {
+    if (meta->resource_count == 0) {
         arp_set_error("Package does not contain any resources");
         return EINVAL;
     }
 
-    if (pack->cat_off < PACKAGE_HEADER_LEN) {
+    if (meta->cat_off < PACKAGE_HEADER_LEN) {
         arp_set_error("Package catalogue offset is too small");
         return EINVAL;
     }
 
-    if (pack->body_off < PACKAGE_HEADER_LEN) {
+    if (meta->body_off < PACKAGE_HEADER_LEN) {
         arp_set_error("Package body offset is too small");
         return EINVAL;
     }
 
-    if (pack->cat_off + pack->cat_len > pack_size) {
+    if (meta->cat_off + meta->cat_len > pack_size) {
         arp_set_error("Package catalogue offset and length are incorrect");
         return EINVAL;
     }
 
-    if (pack->body_off + pack->body_len > pack_size) {
+    if (meta->body_off + meta->body_len > pack_size) {
         arp_set_error("Package body offset and length are incorrect");
         return EINVAL;
     }
 
-    if (pack->cat_off < pack->body_off && pack->cat_off + pack->cat_len > pack->body_off) {
+    if (meta->cat_off < meta->body_off && meta->cat_off + meta->cat_len > meta->body_off) {
         arp_set_error("Package catalogue would overlap body section");
         return EINVAL;
-    } else if (pack->body_off < pack->cat_off && pack->body_off + pack->body_len > pack->cat_off) {
+    } else if (meta->body_off < meta->cat_off && meta->body_off + meta->body_len > meta->cat_off) {
         arp_set_error("Body section would overlap package catalogue");
         return EINVAL;
     }
 
-    if (pack->cat_off > SIZE_MAX || pack->cat_len > SIZE_MAX
-            || pack->body_off > SIZE_MAX || pack->body_len > SIZE_MAX) {
+    if (meta->cat_off > SIZE_MAX || meta->cat_len > SIZE_MAX
+            || meta->body_off > SIZE_MAX || meta->body_len > SIZE_MAX) {
         //TODO: work around this at some point
         arp_set_error("Package is too large to load on a 32-bit architecture");
         return E2BIG;
     }
 
     return 0;
+}
+
+static void _copy_metadata_to_package(arp_package_t *pack, arp_package_meta_t *meta) {
+    pack->major_version = meta->major_version;
+    memcpy(pack->compression_type, meta->compression_type, sizeof(pack->compression_type));
+    memcpy(pack->package_namespace, meta->package_namespace, sizeof(pack->package_namespace));
+    pack->total_parts = meta->total_parts;
+    pack->cat_off = meta->cat_off;
+    pack->cat_len = meta->cat_len;
+    pack->node_count = meta->node_count;
+    pack->directory_count = meta->directory_count;
+    pack->resource_count = meta->resource_count;
+    pack->body_off = meta->body_off;
+    pack->body_len = meta->body_len;
 }
 
 static int _verify_parts_exist(arp_package_t *pack, const char *primary_path) {
@@ -565,7 +584,12 @@ static int _parse_package_catalogue(arp_package_t *pack, const void *pack_data_v
     return 0;
 }
 
-int arp_load_from_file(const char *path, ArpPackage *package) {
+int arp_load_from_file(const char *path, arp_package_meta_t *out_meta, ArpPackage *out_package) {
+    if (out_meta == NULL && out_package == NULL) {
+        arp_set_error("At least one of out_meta and out_package must be non-null.");
+        return EINVAL;
+    }
+
     stat_t package_file_stat;
     if (stat(path, &package_file_stat) != 0) {
         arp_set_error("Failed to stat package file");
@@ -601,6 +625,33 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
         return -1;
     }
 
+    arp_package_meta_t meta;
+
+    int rc = UNINIT_U32;
+    if ((rc = _parse_package_header(&meta, pack_header)) != 0) {
+        fclose(package_file);
+
+        return rc;
+    }
+
+    if ((rc = _validate_package_header(&meta, package_file_size)) != 0) {
+        fclose(package_file);
+
+        return rc;
+    }
+
+    if (out_package == NULL) {
+        assert(out_meta != NULL);
+
+        fclose(package_file);
+
+        memcpy(out_meta, &meta, sizeof(arp_package_meta_t));
+
+        return 0;
+    }
+
+    // from here down out_package is guaranteed to be non-null
+
     arp_package_t *pack = NULL;
     if ((pack = calloc(1, sizeof(arp_package_t))) == NULL) {
         fclose(package_file);
@@ -608,23 +659,10 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
         arp_set_error("calloc failed");
         return -1;
     }
+    
+    _copy_metadata_to_package(pack, &meta);
 
     pack->in_mem_body = NULL;
-
-    int rc = UNINIT_U32;
-    if ((rc = _parse_package_header(pack, pack_header)) != 0) {
-        arp_unload(pack);
-        fclose(package_file);
-
-        return rc;
-    }
-
-    if ((rc = _validate_package_header(pack, package_file_size)) != 0) {
-        arp_unload(pack);
-        fclose(package_file);
-
-        return rc;
-    }
 
     if ((pack->part_paths = calloc(pack->total_parts, sizeof(void*))) == NULL) {
         arp_unload(pack);
@@ -688,11 +726,19 @@ int arp_load_from_file(const char *path, ArpPackage *package) {
         return rc;
     }
 
-    *package = pack;
+    if (out_meta != NULL) {
+        memcpy(out_meta, &meta, sizeof(arp_package_meta_t));
+    }
+    *out_package = pack;
     return 0;
 }
 
-int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPackage *package) {
+int arp_load_from_memory(const unsigned char *data, size_t package_len, arp_package_meta_t *out_meta, ArpPackage *out_package) {
+    if (out_meta == NULL && out_package == NULL) {
+        arp_set_error("At least one of out_meta and out_package must be non-null.");
+        return EINVAL;
+    }
+
     if (package_len < PACKAGE_HEADER_LEN) {
         arp_set_error("Package is too small to contain package header");
         return -1;
@@ -702,21 +748,33 @@ int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPacka
 
     memcpy(pack_header, data, PACKAGE_HEADER_LEN);
 
+    arp_package_meta_t meta;
+
+    int rc = UNINIT_U32;
+    if ((rc = _parse_package_header(&meta, pack_header)) != 0) {
+        return rc;
+    }
+
+    if ((rc = _validate_package_header(&meta, package_len)) != 0) {
+        return rc;
+    }
+
+    if (out_package == NULL) {
+        assert(out_meta != NULL);
+
+        memcpy(out_meta, &meta, sizeof(arp_package_meta_t));
+
+        return 0;
+    }
+
+    // from here down out_package is guaranteed to be non-null
+
     arp_package_t *pack = NULL;
     if ((pack = calloc(1, sizeof(arp_package_t))) == NULL) {
         return ENOMEM;
     }
-
-    int rc = UNINIT_U32;
-    if ((rc = _parse_package_header(pack, pack_header)) != 0) {
-        arp_unload(pack);
-        return rc;
-    }
-
-    if ((rc = _validate_package_header(pack, package_len)) != 0) {
-        arp_unload(pack);
-        return rc;
-    }
+    
+    _copy_metadata_to_package(pack, &meta);
 
     if ((rc = _parse_package_catalogue(pack, data)) != 0) {
         arp_unload(pack);
@@ -733,7 +791,10 @@ int arp_load_from_memory(const unsigned char *data, size_t package_len, ArpPacka
 
     pack->in_mem_body = (const unsigned char *) ((uintptr_t) data + pack->body_off);
 
-    *package = pack;
+    if (out_meta != NULL) {
+        memcpy(out_meta, &meta, sizeof(arp_package_meta_t));
+    }
+    *out_package = pack;
     return 0;
 }
 
