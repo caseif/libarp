@@ -233,7 +233,9 @@ static int _unpack_node_from_file(arp_package_t *pack, const node_desc_t *node, 
         *out_data_len = unpacked_data_len;
     }
 
-    *out_malloced = malloced;
+    if (out_malloced != NULL) {
+        *out_malloced = malloced;
+    }
 
     return 0;
 }
