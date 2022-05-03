@@ -1,9 +1,9 @@
 #!/bin/bash
 
 PROJECT="libarp"
-YEAR="2020-2021"
+YEAR="2020-2022"
 AUTHOR="Max Roncace"
-EMAIL="mproncace@gmail.com"
+EMAIL="mproncace@protonmail.com"
 
 hdr_file="./res/HEADER.txt"
 
