@@ -2,9 +2,10 @@
 
 Version 1.0 (Draft)
 
-## 0. Table of Contents
+## Table of Contents
 
-- [0. Table of Contents](#0-table-of-contents)
+- [Table of Contents](#table-of-contents)
+- [0. Foreword](#0-foreword)
 - [1. Purpose](#1-purpose)
 - [2. Definitions](#2-definitions)
 - [3. Versioning](#3-versioning)
@@ -26,6 +27,12 @@ Version 1.0 (Draft)
   - [6.1. ARP-Specific Mappings](#61-arp-specific-mappings)
 - [7. Referencing Resources](#7-referencing-resources)
 - [8. External Documentation Referenced](#8-external-documentation-referenced)
+
+## 0. Foreword
+
+This is a DRAFT specification and is subject to change without notice and in ways which are not backwards-compatible
+with previous draft revisions. Once the initial specification is finalized with version 1.0, further revisions will be
+properly versioned.
 
 ## 1. Purpose
 
@@ -224,8 +231,8 @@ format component is prefixed with `x-`.
 ARP media types strings SHALL be encoded and interpreted as ASCII strings.
 
 The ARP specification references the [`mime.types`][5] file present in Apache's `httpd` project as it appears in
-revision `1884192` for media type mapping. Additionally, the ARP specification defines a number of other mappings which
-SHALL take precedence over the `mime.types` file.
+revision `1884192` for media type mapping. Additionally, the ARP specification MAY define other mappings which
+SHALL take precedence over the `mime.types` file. These supplementary mappings are listed below.
 
 Packers SHOULD provide a mechanism for user-defined mappings to be used. These SHALL take precedence over all other
 mappings, if applicable, but SHOULD typically be used to supplementally map extensions not included in the mappings
@@ -236,16 +243,6 @@ specified by the ARP standard.
 | Extension | Media type |
 | :-- | :-- |
 | (no extension) | `application/octet-stream` |
-| `.lua` | `text/x-lua` |
-| `.csh` | `text/x-glsl-comp` |
-| `.comp` | `text/x-glsl-comp` |
-| `.fsh` | `text/x-glsl-frag` |
-| `.frag` | `text/x-glsl-frag` |
-| `.geom` | `text/x-glsl-geom` |
-| `.tesc` | `text/x-glsl-tess-control` |
-| `.tese` | `text/x-glsl-tess-eval` |
-| `.vsh` | `text/x-glsl-vert` |
-| `.vert` | `text/x-glsl-vert` |
 
 ## 7. Resource Identifiers
 
