@@ -7,7 +7,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-bool _check_magic(const char *path, const char *magic, size_t magic_len) {
+#ifdef MSVC
+#include <malloc.h>
+#endif
+
+static bool _check_magic(const char *path, const char *magic, size_t magic_len) {
     FILE *package_file = fopen(path, "r");
 
     if (package_file == NULL) {
@@ -27,8 +31,12 @@ bool _check_magic(const char *path, const char *magic, size_t magic_len) {
         fclose(package_file);
         return false;
     }
-
+    
+    #ifdef MSVC
+    unsigned char *magic_data = (unsigned char*) _malloca(magic_len);
+    #else
     unsigned char magic_data[magic_len];
+    #endif
     memset(magic_data, 0, magic_len);
 
     if (fread(magic_data, magic_len, 1, package_file) != 1) {
@@ -40,7 +48,13 @@ bool _check_magic(const char *path, const char *magic, size_t magic_len) {
 
     fclose(package_file);
 
-    return memcmp(magic_data, magic, magic_len) == 0;
+    bool res = memcmp(magic_data, magic, magic_len) == 0;
+
+    #ifdef MSVC
+    _freea(res);
+    #endif
+
+    return res;
 }
 
 bool arp_is_base_archive(const char *path) {
