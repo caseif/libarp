@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifdef MSVC
+#ifdef _MSC_VER
 #include <malloc.h>
 #endif
 
@@ -32,7 +32,7 @@ static bool _check_magic(const char *path, const char *magic, size_t magic_len) 
         return false;
     }
     
-    #ifdef MSVC
+    #ifdef _MSC_VER
     unsigned char *magic_data = (unsigned char*) _malloca(magic_len);
     #else
     unsigned char magic_data[magic_len];
