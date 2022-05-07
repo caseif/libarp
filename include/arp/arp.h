@@ -16,6 +16,7 @@ extern "C" {
 #include "arp/pack/pack.h"
 #include "arp/unpack/list.h"
 #include "arp/unpack/load.h"
+#include "arp/unpack/peek.h"
 #include "arp/unpack/resource.h"
 #include "arp/unpack/stream.h"
 #include "arp/unpack/types.h"
