@@ -128,7 +128,7 @@ csv_file_t *parse_csv(const void *stock_csv, size_t stock_len, const void *user_
 
             // for Windows, replace the carriage return as well
             if (cur[line_len - 1] == '\r') {
-                cur[line_len - 1] = '\r';
+                cur[line_len - 1] = '\0';
             }
         }
 
