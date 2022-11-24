@@ -13,6 +13,7 @@
 #include "internal/unpack/types.h"
 #include "internal/util/bt.h"
 #include "internal/util/error.h"
+#include "internal/util/ll.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -20,8 +21,15 @@
 
 #define INITIAL_SET_CAP 16
 
-static int _package_cmp_fn(const arp_package_t *a, const arp_package_t *b) {
-    return strncmp(a->package_namespace, b->package_namespace, sizeof(a->package_namespace));
+static int _cmp_pack_ll_head_to_pack_ll_head(const linked_list_t *a, const linked_list_t *b) {
+    arp_package_t *real_pack_a = (arp_package_t*) ((linked_list_t*) a)->data;
+    arp_package_t *real_pack_b = (arp_package_t*) ((linked_list_t*) b)->data;
+    return strncmp(real_pack_a->package_namespace, real_pack_b->package_namespace, sizeof(real_pack_b->package_namespace));
+}
+
+static int _cmp_pack_to_pack_ll_head(const arp_package_t *pack, const linked_list_t *ll) {
+    arp_package_t *real_pack = (arp_package_t*) ((linked_list_t*) ll)->data;
+    return strncmp(pack->package_namespace, real_pack->package_namespace, sizeof(real_pack->package_namespace));
 }
 
 ArpPackageSet arp_create_set(void) {
@@ -44,9 +52,13 @@ ArpPackageSet arp_create_set(void) {
 
 int arp_add_to_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
-    if (!bt_insert_distinct(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn)) {
-        arp_set_error("Set contains package with identical namespace");
-        return -1;
+
+    linked_list_t *existing = bt_find(&real_set->tree, package, (BtFindCmpFn) _cmp_pack_to_pack_ll_head);
+
+    if (existing != NULL) {
+        ll_push_back(existing, package);
+    } else {
+        bt_insert(&real_set->tree, ll_create(package), (BtInsertCmpFn) _cmp_pack_ll_head_to_pack_ll_head);
     }
 
     return 0;
@@ -54,7 +66,18 @@ int arp_add_to_set(ArpPackageSet set, ArpPackage package) {
 
 void arp_remove_from_set(ArpPackageSet set, ArpPackage package) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
-    bt_remove(&real_set->tree, package, (BtInsertCmpFn) _package_cmp_fn);
+
+    linked_list_t *existing = bt_find(&real_set->tree, package, (BtFindCmpFn) _cmp_pack_to_pack_ll_head);
+
+    if (existing != NULL) {
+        ll_remove(existing, package);
+        if (existing->data == NULL) {
+            // remove the list from the tree if it's now empty
+            bt_remove(&real_set->tree, existing, (BtFindCmpFn) _cmp_pack_ll_head_to_pack_ll_head);
+            ll_free(existing);
+        }
+    }
+
 }
 
 int arp_unload_set_packages(ArpPackageSet set) {

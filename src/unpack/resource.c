@@ -13,8 +13,10 @@
 #include "arp/util/error.h"
 #include "internal/unpack/types.h"
 #include "internal/unpack/unpack_util.h"
+#include "internal/util/bt.h"
 #include "internal/util/common.h"
 #include "internal/util/error.h"
+#include "internal/util/ll.h"
 #include "internal/util/util.h"
 
 #include <errno.h>
@@ -27,8 +29,8 @@ static int _cmp_node_name_to_needle(const void *name, const void *node) {
     return strncmp(name, real_node->name, real_node->name_len_s + 1);
 }
 
-static int _cmp_package_ns_to_needle(const void *name, const void *pack) {
-    arp_package_t *real_pack = (arp_package_t*) pack;
+static int _cmp_ll_package_ns_to_needle(const void *name, const void *ll) {
+    arp_package_t *real_pack = (arp_package_t*) ((linked_list_t*) ll)->data;
     return strncmp(name, real_pack->package_namespace, sizeof(real_pack->package_namespace));
 }
 
@@ -132,14 +134,27 @@ int arp_find_resource_in_set(ConstArpPackageSet set, const char *path, arp_resou
     memcpy(path_ns, path, ns_len);
     path_ns[ns_len] = '\0';
 
-    arp_package_t *pack = bt_find(&real_set->tree, path_ns, _cmp_package_ns_to_needle);
+    linked_list_t *pack_list = bt_find(&real_set->tree, path_ns, _cmp_ll_package_ns_to_needle);
 
-    if (pack == NULL) {
+    if (pack_list == NULL) {
         arp_set_error("Resource does not exist at the specified path");
         return E_ARP_RESOURCE_NOT_FOUND;
     }
 
-    return arp_find_resource(pack, path, out_meta);
+    do {
+        arp_package_t *pack = pack_list->data;
+
+        int find_rc = arp_find_resource(pack, path, out_meta);
+
+        if (find_rc == 0) {
+            return 0;
+        }
+
+        pack_list = pack_list->next;
+    } while (pack_list != NULL);
+
+    arp_set_error("Resource does not exist at the specified path");
+    return E_ARP_RESOURCE_NOT_FOUND;
 }
 
 arp_resource_t *arp_load_resource(arp_resource_meta_t *meta) {

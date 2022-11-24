@@ -9,16 +9,16 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+struct LinkedList;
 
-#include <stdbool.h>
+typedef struct LinkedList {
+    void *data;
+    struct LinkedList *next;
+} linked_list_t;
 
-bool arp_is_base_archive(const char *path);
+linked_list_t *ll_create(void *initial);
+void ll_free(linked_list_t *ll);
 
-bool arp_is_part_archive(const char *path);
+void ll_push_back(linked_list_t *ll, void *data);
 
-#ifdef __cplusplus
-}
-#endif
+void ll_remove(linked_list_t *ll, void *data);

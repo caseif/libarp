@@ -18,7 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-//#define#define
 static void _bt_rotate_left(binary_tree_t *tree, bt_node_t *root) {
     assert(root->r != NULL);
 
