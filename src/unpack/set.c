@@ -103,6 +103,12 @@ int arp_unload_set_packages(ArpPackageSet set) {
 void arp_destroy_set(ArpPackageSet set) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
 
+    linked_list_t **ll;
+    bt_reset_iterator(&real_set->tree);
+    while ((ll = (linked_list_t**) bt_iterate(&real_set->tree)) != NULL) {
+        ll_free(*ll);
+    }
+
     bt_free(&real_set->tree);
 
     free(real_set);
