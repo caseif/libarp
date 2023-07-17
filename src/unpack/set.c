@@ -84,12 +84,16 @@ int arp_unload_set_packages(ArpPackageSet set) {
     arp_package_set_t *real_set = (arp_package_set_t*) set;
     
     int rc = 0;
-    arp_package_t **pack;
+    linked_list_t **ll;
     bt_reset_iterator(&real_set->tree);
-    while ((pack = (arp_package_t**) bt_iterate(&real_set->tree)) != NULL) {
-        int rc_temp = arp_unload(*pack);
-        if (rc_temp != 0) {
-            rc = rc_temp;
+    while ((ll = (linked_list_t**) bt_iterate(&real_set->tree)) != NULL) {
+        while (ll != NULL) {
+            arp_package_t *pack = (arp_package_t*) (*ll)->data;
+            int rc_temp = arp_unload(pack);
+            if (rc_temp != 0) {
+                rc = rc_temp;
+            }
+            ll = (*ll)->next != NULL ? &(*ll)->next : NULL;
         }
     }
 
