@@ -2,63 +2,55 @@ name: libarp
 on: [push, pull_request]
 
 jobs:
-  build-ubuntu-gcc:
-
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        token: ${{secrets.ACCESS_TOKEN}}
-        submodules: recursive
-    - name: configure
-      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
-      env:
-        CC: gcc
-    - name: build
-      run: cmake --build build --parallel 8
-    - name: archive
-      uses: actions/upload-artifact@v1
-      with:
-        name: libarp_dist_linux
-        path: build/dist/
-
-  build-ubuntu-clang:
-
-    runs-on: ubuntu-20.04
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+        compiler: [gcc, clang, msvc]
+        configuration: [Release, Debug]
+        exclude:
+          - os: windows-2022
+            compiler: gcc
+          - os: windows-2022
+            compiler: clang
+          - os: ubuntu-22.04
+            compiler: msvc
+    runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        token: ${{secrets.ACCESS_TOKEN}}
-        submodules: recursive
-    - name: configure
-      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
-      env:
-        CC: clang
-    - name: build
-      run: cmake --build build --parallel 8
-    - name: archive
-      uses: actions/upload-artifact@v1
-      with:
-        name: libarp_dist_linux
-        path: build/dist/
+      - name: Set env vars for current matrix configuration
+        shell: pwsh
+        run: |
+          $os_name = "${{ runner.os }}".ToLower()
+          echo "OS_NAME=$os_name" >> "$env:GITHUB_ENV"
+          
+          $config_name = "${{ matrix.configuration }}".ToLower()
+          echo "CONFIG_NAME=$config_name" >> $env:GITHUB_ENV
 
-  build-windows:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{secrets.ACCESS_TOKEN}}
+          submodules: recursive
 
-    runs-on: windows-2019
+      - name: Configure
+        shell: pwsh
+        run: |
+          mkdir build
+          cd build
+          if ("$env:OS_NAME" -eq "windows") {
+              cmake -DCMAKE_SYSTEM_VERSION=10.0.19041.0 -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} ..
+          } else {
+              cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} ..
+          }
+        env:
+          CC: gcc
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        token: ${{secrets.ACCESS_TOKEN}}
-        submodules: recursive
-    - name: configure
-      run: mkdir build && cd build && cmake -DCMAKE_SYSTEM_VERSION=10.0.19041.0 -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Debug ..
-    - name: build
-      run: cmake --build build --parallel 8
-    - name: archive
-      uses: actions/upload-artifact@v1
-      with:
-        name: libarp_dist_windows
-        path: build/dist/
+      - name: Build
+        run: cmake --build build --parallel 8
+
+      - name: Archive
+        uses: actions/upload-artifact@v1
+        with:
+          name: libarp_dist_${{ env.OS_NAME }}_${{ matrix.compiler }}_${{ env.CONFIG_NAME }}
+          path: build/dist/
