@@ -27,6 +27,8 @@
 
 #ifdef _WIN32
 #include <direct.h>
+#else
+#include <unistd.h>
 #endif
 
 int _unpack_node_to_fs(node_desc_t *node, const char *cur_dir,

@@ -38,6 +38,7 @@
 #include <shlwapi.h>
 #else
 #include <libgen.h>
+#include <unistd.h>
 #endif
 
 #define CURRENT_MAJOR_VERSION 1
