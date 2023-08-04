@@ -28,7 +28,7 @@ jobs:
           $config_name = "${{ matrix.configuration }}".ToLower()
           echo "CONFIG_NAME=$config_name" >> $env:GITHUB_ENV
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           token: ${{secrets.ACCESS_TOKEN}}
           submodules: recursive
