@@ -18,7 +18,7 @@
 #include "internal/util/error.h"
 #include "internal/util/stack.h"
 
-stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack_t *storage) {
+arp_stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, arp_stack_t *storage) {
     if (el_len == 0) {
         arp_set_error("Element length must not be 0");
         return NULL;
@@ -39,12 +39,12 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack
         return NULL;
     }
 
-    stack_t *stack = NULL;
+    arp_stack_t *stack = NULL;
     if (storage != NULL) {
         stack = storage;
         stack->malloced = false;
     } else {
-        if ((stack = (stack_t*) malloc(sizeof(stack_t))) == NULL) {
+        if ((stack = (arp_stack_t*) malloc(sizeof(arp_stack_t))) == NULL) {
             arp_set_error("malloc failed");
             return NULL;
         }
@@ -67,14 +67,14 @@ stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack
     return stack;
 }
 
-void stack_free(stack_t *stack) {
+void stack_free(arp_stack_t *stack) {
     free(stack->data);
     if (stack->malloced) {
         free(stack);
     }
 }
 
-int stack_push(stack_t *stack, void *data) {
+int stack_push(arp_stack_t *stack, void *data) {
     if (stack->index == stack->capacity) {
         if (stack->capacity == stack->cap_max) {
             arp_set_error("Stack exceeded max capacity");
@@ -96,7 +96,7 @@ int stack_push(stack_t *stack, void *data) {
     return 0;
 }
 
-void *stack_pop(stack_t *stack) {
+void *stack_pop(arp_stack_t *stack) {
     if (stack->index == 0) {
         return NULL;
     }
@@ -106,6 +106,6 @@ void *stack_pop(stack_t *stack) {
     return (char*) stack->data + (stack->index * stack->el_len);
 }
 
-void stack_clear(stack_t *stack) {
+void stack_clear(arp_stack_t *stack) {
     stack->index = 0;
 }

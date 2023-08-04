@@ -40,7 +40,7 @@ typedef struct BinaryTree {
     bt_node_t *storage;
     bool malloced;
 
-    stack_t it_stack;
+    arp_stack_t it_stack;
 } binary_tree_t;
 
 typedef int (*BtInsertCmpFn)(const void *a, const void *b);

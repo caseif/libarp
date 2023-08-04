@@ -20,14 +20,14 @@ typedef struct Stack {
     size_t cap_increment;
     size_t cap_max;
     bool malloced;
-} stack_t;
+} arp_stack_t;
 
-stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, stack_t *storage);
+arp_stack_t *stack_create(size_t el_len, size_t cap_increment, size_t cap_max, arp_stack_t *storage);
 
-void stack_free(stack_t *stack);
+void stack_free(arp_stack_t *stack);
 
-int stack_push(stack_t *stack, void *data);
+int stack_push(arp_stack_t *stack, void *data);
 
-void *stack_pop(stack_t *stack);
+void *stack_pop(arp_stack_t *stack);
 
-void stack_clear(stack_t *stack);
+void stack_clear(arp_stack_t *stack);
