@@ -25,7 +25,7 @@ static bool _check_magic(const char *path, const char *magic, size_t magic_len) 
 
     if (package_file == NULL) {
         arp_set_error("Failed to open package file");
-        return -1;
+        return false;
     }
 
     stat_t package_file_stat;
@@ -33,7 +33,7 @@ static bool _check_magic(const char *path, const char *magic, size_t magic_len) 
         fclose(package_file);
 
         arp_set_error("Failed to stat package file");
-        return NULL;
+        return false;
     }
 
     if ((size_t) package_file_stat.st_size < magic_len) {
