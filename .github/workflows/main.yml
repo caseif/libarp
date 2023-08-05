@@ -61,7 +61,7 @@ jobs:
           }
 
       - name: Build
-        run: cmake --build build --parallel 2
+        run: cmake --build build --config ${{ matrix.configuration }} --parallel 2
 
       - name: Archive
         uses: actions/upload-artifact@v1
