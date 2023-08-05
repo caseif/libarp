@@ -3,6 +3,37 @@ if(POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
 endif()
 
+function(_arp_disable_warnings target)
+  if(NOT TARGET "${target}")
+    message(WARNING "Target '${target}' does not exist")
+    return()
+  endif()
+
+  get_target_property(TARGET_COMPILER_FLAGS "${target}" COMPILE_OPTIONS)
+
+  if(TARGET_COMPILER_FLAGS)
+    # remove any present warning flags
+    if(MSVC)
+      list(FILTER TARGET_COMPILER_FLAGS EXCLUDE REGEX "^(/W[0-4])|(\\$<\\$<(.*)>:/W[0-4]>)$")
+    elseif(GCC OR CLANG)
+      list(FILTER TARGET_COMPILER_FLAGS EXCLUDE REGEX "^(-W)|(\\$<\\$<(.*)>:-W(.*)>$)")
+    else()
+      message(WARNING "Unknown compiler, unable to disable warnings for dependencies")
+      return()
+    endif()
+
+    # assign the modified flags back to the target
+    set_target_properties("${target}" PROPERTIES COMPILE_OPTIONS "${TARGET_COMPILER_FLAGS}")
+  endif()
+
+  # add flag to disable all warnings
+  if(MSVC)
+    target_compile_options(${target} PRIVATE "/w")
+  elseif(GCC OR CLANG)
+    target_compile_options(${target} PRIVATE "-w")
+  endif()
+endfunction()
+
 project(arp VERSION 1.0.0
             LANGUAGES C)
 
@@ -68,7 +99,7 @@ if(${LIBARP_FEATURE_DEFLATE})
   list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
   list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
 
-  if(NOT TARGET "zlib")
+  if(NOT TARGET "${ZLIB_LIBRARY}")
     set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
     add_subdirectory("${ZLIB_SOURCE_DIR}")
     set_target_properties(minigzip example
@@ -77,6 +108,8 @@ if(${LIBARP_FEATURE_DEFLATE})
       set_target_properties(minigzip64 example64
                               PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
     endif()
+
+    _arp_disable_warnings("${ZLIB_LIBRARY}")
   endif()
 endif()
 
