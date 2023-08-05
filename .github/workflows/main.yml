@@ -66,5 +66,5 @@ jobs:
       - name: Archive
         uses: actions/upload-artifact@v1
         with:
-          name: libarp_dist_${{ env.OS_NAME }}_${{ matrix.compiler }}_${{ env.CONFIG_NAME }}
+          name: libarp_dist-${{ env.OS_NAME }}-${{ matrix.compiler }}-${{ env.CONFIG_NAME }}
           path: build/dist/
