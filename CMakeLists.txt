@@ -28,7 +28,7 @@ function(_arp_disable_warnings target)
 
   # add flag to disable all warnings
   if(MSVC)
-    target_compile_options(${target} PRIVATE "/w")
+    target_compile_options(${target} PRIVATE "/W0")
   elseif(GCC OR CLANG)
     target_compile_options(${target} PRIVATE "-w")
   endif()
