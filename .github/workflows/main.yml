@@ -6,7 +6,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022]
+        os: [ubuntu-22.04, windows-2022, macos-12]
         compiler: [gcc, clang, msvc]
         configuration: [Release, Debug]
         exclude:
@@ -15,6 +15,8 @@ jobs:
           - os: windows-2022
             compiler: clang
           - os: ubuntu-22.04
+            compiler: msvc
+          - os: macos-12
             compiler: msvc
     runs-on: ${{ matrix.os }}
 
@@ -27,6 +29,20 @@ jobs:
           
           $config_name = "${{ matrix.configuration }}".ToLower()
           echo "CONFIG_NAME=$config_name" >> $env:GITHUB_ENV
+          
+      - name: Set env vars for GCC
+        shell: pwsh
+        run: |
+          $suffix = if ("$env:OS_NAME" -eq "macos") { "-12" } else { "" }
+          echo "CC=gcc$suffix" >> "$env:GITHUB_ENV"
+          echo "CXX=g++$suffix" >> "$env:GITHUB_ENV"
+        if: matrix.compiler == 'gcc'
+
+      - name: Set env vars for Clang
+        run: |
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+        if: matrix.compiler == 'clang'
 
       - uses: actions/checkout@v3
         with:
@@ -43,11 +59,9 @@ jobs:
           } else {
               cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} ..
           }
-        env:
-          CC: gcc
 
       - name: Build
-        run: cmake --build build --parallel 8
+        run: cmake --build build --parallel 2
 
       - name: Archive
         uses: actions/upload-artifact@v1
