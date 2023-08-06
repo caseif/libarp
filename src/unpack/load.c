@@ -54,7 +54,7 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
 
     size_t str_len_b = str_len_s + 1;
 
-    if (str_len_s > 0) {
+    //if (str_len_s > 0) {
         char tmp[VAR_STR_BUF_LEN];
         _copy_str_to_field(tmp, catalogue, str_len_s, off);
         tmp[str_len_s] = '\0';
@@ -64,9 +64,9 @@ static int _read_var_string(const void *catalogue, size_t off, char **target, si
             return -1;
         }
         memcpy(*target, tmp, str_len_b);
-    } else {
-        *target = NULL;
-    }
+    //} else {
+        //*target = "";
+    //}
 
     return 0;
 }

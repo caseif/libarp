@@ -17,7 +17,11 @@ extern "C" {
 
 #define E_ARP_RESOURCE_NOT_FOUND 1024
 
+typedef void (* ArpErrorCallback)(const char *);
+
 const char *arp_get_error(void);
+
+void arp_set_error_callback(const ArpErrorCallback callback);
 
 #ifdef __cplusplus
 }
