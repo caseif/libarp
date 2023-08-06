@@ -55,7 +55,7 @@ void arp_real_set_error(const char *msg, const char *file, int line) {
         (void)(file);
         (void)(line);
         full_msg = malloc(full_msg_len);
-        sprintf(full_msg, "%s", err_msg);
+        sprintf(full_msg, "%s", g_err_msg);
         #endif
 
         g_err_callback(full_msg);
