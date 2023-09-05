@@ -44,7 +44,7 @@ void arp_real_set_error(const char *msg, const char *file, int line) {
     memcpy(g_err_msg, msg, msg_len + 1);
 
     if (g_err_callback != NULL) {
-        size_t full_msg_len = strlen(g_err_msg + 1);
+        size_t full_msg_len = strlen(g_err_msg) + 1;
         char *full_msg;
 
         #ifdef LIBARP_DEBUG
