@@ -61,9 +61,17 @@ endif()
 
 set(LIBARP_USER_MAPPINGS "" CACHE STRING "Path to user-supplied media type mappings")
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(DEF_USE_SYSTEM_ZLIB OFF)
+else()
+  set(DEF_USE_SYSTEM_ZLIB ON)
+endif()
+
 option(LIBARP_FEATURE_PACK "Compile with support for packing data" ON)
 option(LIBARP_FEATURE_UNPACK "Compile with support for unpacking data" ON)
 option(LIBARP_FEATURE_DEFLATE "Compile with support for DEFLATE compression" ON)
+
+option(USE_SYSTEM_ZLIB "Use system-provided zlib library and headers" "${DEF_USE_SYSTEM_ZLIB}")
 
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 if("${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
@@ -86,30 +94,43 @@ endif()
 # include dir for generated headers which must be copied (configs)
 set(TMP_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include.tmp")
 
+set(EXT_INCLUDE_DIRS "")
 set(EXT_LIBS "")
 set(EXT_LIBS_STATIC "")
 
 if(${LIBARP_FEATURE_DEFLATE})
-  set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
-  set(ZLIB_INCLUDE_DIR "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
   add_definitions("-DFEATURE_DEFLATE")
-  configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
-  set(ZLIB_LIBRARY "zlib")
-  set(ZLIB_LIBRARY_STATIC "zlibstatic")
-  list(APPEND EXT_LIBS "${ZLIB_LIBRARY}")
-  list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARY_STATIC}")
 
-  if(NOT TARGET "${ZLIB_LIBRARY}")
-    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-    add_subdirectory("${ZLIB_SOURCE_DIR}")
-    set_target_properties(minigzip example
-                            PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
-    if(TARGET minigzip64)
-      set_target_properties(minigzip64 example64
+  if(USE_SYSTEM_ZLIB)
+    find_package(ZLIB REQUIRED)
+    list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
+    list(APPEND EXT_LIBS "${ZLIB_LIBRARIES}")
+    list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARIES}")
+  else()
+    set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
+    set(ZLIB_INCLUDE_DIRS "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
+    set(ZLIB_INCLUDE_DIR "${ZLIB_INCLUDE_DIRS}")
+    configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
+    set(ZLIB_LIBRARY "zlib")
+    set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}")
+    set(ZLIB_STATIC_TARGET "zlibstatic")
+
+    list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
+    list(APPEND EXT_LIBS "${ZLIB_LIBRARIES}")
+    list(APPEND EXT_LIBS_STATIC "${ZLIB_STATIC_TARGET}")
+
+    if(NOT TARGET "${ZLIB_LIBRARY}")
+      set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+      add_subdirectory("${ZLIB_SOURCE_DIR}")
+      set_target_properties(minigzip example
                               PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
-    endif()
+      if(TARGET minigzip64)
+        set_target_properties(minigzip64 example64
+                                PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+      endif()
 
-    _arp_disable_warnings("${ZLIB_LIBRARY}")
+      _arp_disable_warnings("${ZLIB_LIBRARY}")
+    endif()
   endif()
 endif()
 
@@ -196,11 +217,8 @@ add_library("${PROJECT_NAME}_static" STATIC ${C_FILES} ${H_FILES})
 target_include_directories("${PROJECT_NAME}" PUBLIC "${INC_DIR};${TEMP_INC_DIR}")
 target_include_directories("${PROJECT_NAME}_static" PUBLIC "${INC_DIR};${TEMP_INC_DIR}")
 
-if(${LIBARP_FEATURE_DEFLATE})
-  target_include_directories("${PROJECT_NAME}" PUBLIC "${ZLIB_INCLUDE_DIR}")
-  target_include_directories("${PROJECT_NAME}_static" PUBLIC "${ZLIB_INCLUDE_DIR}")
-endif()
-
+target_include_directories("${PROJECT_NAME}" PUBLIC "${EXT_INCLUDE_DIRS}")
+target_include_directories("${PROJECT_NAME}_static" PUBLIC "${EXT_INCLUDE_DIRS}")
 target_link_libraries("${PROJECT_NAME}" "${EXT_LIBS}")
 target_link_libraries("${PROJECT_NAME}_static" "${EXT_LIBS_STATIC}")
 
@@ -284,6 +302,6 @@ function(copy_dep_output DEP_TARGET)
   endif()
 endfunction()
 
-if(${LIBARP_FEATURE_DEFLATE})
+if(LIBARP_FEATURE_DEFLATE AND NOT USE_SYSTEM_ZLIB)
   copy_dep_output("${ZLIB_LIBRARY}")
 endif()
