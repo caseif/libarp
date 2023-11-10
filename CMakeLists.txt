@@ -97,6 +97,8 @@ set(TMP_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include.tmp")
 set(EXT_INCLUDE_DIRS "")
 set(EXT_LIBS "")
 set(EXT_LIBS_STATIC "")
+set(EXT_DEPS "")
+set(EXT_DEPS_STATIC "")
 
 if(${LIBARP_FEATURE_DEFLATE})
   add_definitions("-DFEATURE_DEFLATE")
@@ -107,30 +109,34 @@ if(${LIBARP_FEATURE_DEFLATE})
     list(APPEND EXT_LIBS "${ZLIB_LIBRARIES}")
     list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARIES}")
   else()
-    set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
-    set(ZLIB_INCLUDE_DIRS "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
-    set(ZLIB_INCLUDE_DIR "${ZLIB_INCLUDE_DIRS}")
-    configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
-    set(ZLIB_LIBRARY "zlib")
-    set(ZLIB_LIBRARIES "${ZLIB_LIBRARY}")
+    set(ZLIB_TARGET "zlib")
     set(ZLIB_STATIC_TARGET "zlibstatic")
 
-    list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
-    list(APPEND EXT_LIBS "${ZLIB_LIBRARIES}")
-    list(APPEND EXT_LIBS_STATIC "${ZLIB_STATIC_TARGET}")
+    if(NOT TARGET "${ZLIB_TARGET}")
+      set(ZLIB_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/zlib")
 
-    if(NOT TARGET "${ZLIB_LIBRARY}")
+      set(ZLIB_INCLUDE_DIRS "${ZLIB_SOURCE_DIR};${TMP_INCLUDE_DIR}/zlib")
+      configure_file("${ZLIB_SOURCE_DIR}/zconf.h.in" "${TMP_INCLUDE_DIR}/zlib/zconf.h")
+
       set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
       add_subdirectory("${ZLIB_SOURCE_DIR}")
-      set_target_properties(minigzip example
-                              PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+
+      if(TARGET minigzip)
+        set_target_properties(minigzip example
+                                PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+      endif()
       if(TARGET minigzip64)
         set_target_properties(minigzip64 example64
                                 PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
       endif()
 
-      _arp_disable_warnings("${ZLIB_LIBRARY}")
+      _arp_disable_warnings("${ZLIB_TARGET}")
+      _arp_disable_warnings("${ZLIB_STATIC_TARGET}")
     endif()
+
+    list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
+    list(APPEND EXT_LIBS "${ZLIB_TARGET}")
+    list(APPEND EXT_LIBS_STATIC "${ZLIB_STATIC_TARGET}")
   endif()
 endif()
 
@@ -303,5 +309,5 @@ function(copy_dep_output DEP_TARGET)
 endfunction()
 
 if(LIBARP_FEATURE_DEFLATE AND NOT USE_SYSTEM_ZLIB)
-  copy_dep_output("${ZLIB_LIBRARY}")
+  copy_dep_output("${ZLIB_TARGET}")
 endif()
