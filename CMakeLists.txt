@@ -104,11 +104,16 @@ if(${LIBARP_FEATURE_DEFLATE})
   add_definitions("-DFEATURE_DEFLATE")
 
   if(USE_SYSTEM_ZLIB)
+    message("Using system-provided zlib")
+
     find_package(ZLIB REQUIRED)
+
     list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
     list(APPEND EXT_LIBS "${ZLIB_LIBRARIES}")
     list(APPEND EXT_LIBS_STATIC "${ZLIB_LIBRARIES}")
   else()
+    message("Using local zlib build")
+
     set(ZLIB_TARGET "zlib")
     set(ZLIB_STATIC_TARGET "zlibstatic")
 
@@ -132,6 +137,8 @@ if(${LIBARP_FEATURE_DEFLATE})
 
       _arp_disable_warnings("${ZLIB_TARGET}")
       _arp_disable_warnings("${ZLIB_STATIC_TARGET}")
+    else()
+      message("'${ZLIB_TARGET}' target already exists, reusing it")
     endif()
 
     list(APPEND EXT_INCLUDE_DIRS "${ZLIB_INCLUDE_DIRS}")
